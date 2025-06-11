@@ -7,11 +7,26 @@ require('dotenv').config();
 const app = express();
 
 // Configuración de CORS
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://lkwgcow8ks8gocg8ss0k4c8g.5.135.131.59.sslip.io',
+    'https://lkwgcow8ks8gocg8ss0k4c8g.5.135.131.59.sslip.io'
+];
+
 app.use(cors({
-    origin: ['http://localhost:3000', 'http://lkwgcow8ks8gocg8ss0k4c8g.5.135.131.59.sslip.io'],
+    origin: function(origin, callback) {
+        // Permitir solicitudes sin origen (como aplicaciones móviles o curl)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'La política CORS para este sitio no permite acceso desde el origen especificado.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 }));
 
 // Middleware para logging
