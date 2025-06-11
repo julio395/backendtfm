@@ -14,7 +14,7 @@ RUN npm ci --only=production
 COPY . .
 
 # Exponer el puerto que usa la aplicación
-EXPOSE 3000
+EXPOSE 5000
 
 # Comando para iniciar la aplicación
 CMD ["npm", "start"] 
