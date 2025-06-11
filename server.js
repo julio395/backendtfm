@@ -1,13 +1,44 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const { ObjectId } = require('mongodb');
 require('dotenv').config();
 
 const app = express();
 
-// Middleware
+// Configuración de CORS
 app.use(cors());
+
+// Middleware para logging
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
+
 app.use(express.json());
+
+// Ruta de prueba
+app.get('/api/test', (req, res) => {
+    console.log('Test endpoint hit');
+    res.json({ message: 'Backend is working!' });
+});
+
+// Ruta para verificar la conexión a MongoDB
+app.get('/api/mongodb-status', async (req, res) => {
+    try {
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        res.json({
+            status: 'connected',
+            collections: collections.map(c => c.name)
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+});
 
 // Ruta de prueba simple
 app.get('/test', (req, res) => {
@@ -15,57 +46,92 @@ app.get('/test', (req, res) => {
     res.json({ message: 'Backend is working!' });
 });
 
-// Conexión a MongoDB
+// Configuración de MongoDB
 const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE9pEmCX7dDhX5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true';
-console.log('Intentando conectar a MongoDB...');
 
-mongoose.connect(MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    dbName: 'tfm'
-})
-.then(async () => {
-    console.log('Conectado a MongoDB - Base de datos: tfm');
+// Inicialización de colecciones
+const collections = [
+    'Activos',
+    'Amenazas',
+    'Vulnerabilidades',
+    'Salvaguardas',
+    'Relaciones',
+    'Auditorias',
+    'Borradores'
+];
+
+// Definición de colecciones
+let auditoriasCollection;
+
+// Función para inicializar colecciones
+const initializeCollections = async () => {
     try {
-        // Obtener la base de datos
         const db = mongoose.connection.db;
-        
-        // Listar todas las bases de datos disponibles
-        const adminDb = mongoose.connection.db.admin();
-        const dbs = await adminDb.listDatabases();
-        console.log('Bases de datos disponibles:', dbs.databases.map(db => db.name));
-        
-        // Listar todas las colecciones disponibles
-        const collections = await db.listCollections().toArray();
-        console.log('Colecciones disponibles:', collections.map(c => c.name));
-        
-        // Verificar cada colección
-        const collectionNames = ['Activos', 'Amenazas', 'Vulnerabilidades', 'Salvaguardas', 'Relaciones'];
-        for (const name of collectionNames) {
-            try {
-                const collection = db.collection(name);
-                const count = await collection.countDocuments();
-                console.log(`Colección ${name}: ${count} documentos`);
-                
-                // Obtener un documento de ejemplo
-                const sample = await collection.findOne();
-                if (sample) {
-                    console.log(`Ejemplo de documento en ${name}:`, JSON.stringify(sample, null, 2));
-                } else {
-                    console.log(`No se encontraron documentos en la colección ${name}`);
-                }
-            } catch (error) {
-                console.error(`Error al acceder a la colección ${name}:`, error);
+        const existingCollections = await db.listCollections().toArray();
+        const existingCollectionNames = existingCollections.map(col => col.name);
+
+        for (const collectionName of collections) {
+            if (!existingCollectionNames.includes(collectionName)) {
+                console.log(`Creando colección: ${collectionName}`);
+                await db.createCollection(collectionName);
             }
         }
+        
+        // Inicializar referencias a colecciones
+        auditoriasCollection = db.collection('Auditorias');
+        
+        console.log('Todas las colecciones inicializadas correctamente');
     } catch (error) {
-        console.error('Error al listar colecciones:', error);
+        console.error('Error al inicializar colecciones:', error);
+        throw error;
     }
-})
-.catch(err => {
-    console.error('Error conectando a MongoDB:', err);
-    process.exit(1);
+};
+
+// Manejar errores no capturados
+process.on('uncaughtException', (error) => {
+    console.error('Error no capturado:', error);
 });
+
+process.on('unhandledRejection', (error) => {
+    console.error('Promesa rechazada no manejada:', error);
+});
+
+// Conectar a MongoDB
+const connectDB = async () => {
+    try {
+        console.log('Intentando conectar a MongoDB...');
+        await mongoose.connect(MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            dbName: 'tfm'
+        });
+        
+        console.log('Conectado a MongoDB - Base de datos: tfm');
+        await initializeCollections();
+    } catch (error) {
+        console.error('Error al conectar a MongoDB:', error);
+        process.exit(1);
+    }
+};
+
+// Iniciar el servidor
+const startServer = async () => {
+    try {
+        // Primero conectar a MongoDB
+        await connectDB();
+
+        // Luego iniciar el servidor Express
+        app.listen(PORT, () => {
+            console.log(`Servidor corriendo en http://localhost:${PORT}`);
+        });
+    } catch (error) {
+        console.error('Error al iniciar el servidor:', error);
+        process.exit(1);
+    }
+};
+
+// Iniciar la aplicación
+startServer();
 
 // Ruta de prueba para verificar la conexión
 app.get('/api/test', async (req, res) => {
@@ -94,24 +160,52 @@ app.get('/api/test', async (req, res) => {
 app.get('/api/tfm/:collection', async (req, res) => {
     try {
         const { collection } = req.params;
-        console.log(`Obteniendo datos de la colección: ${collection}`);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        const skip = (page - 1) * limit;
+        
+        // Convertir el nombre de la colección a la primera letra en mayúscula
+        const collectionName = collection.charAt(0).toUpperCase() + collection.slice(1).toLowerCase();
+        
+        console.log(`Obteniendo datos de la colección: ${collectionName}, página: ${page}, límite: ${limit}`);
         
         const db = mongoose.connection.db;
-        const collectionObj = db.collection(collection);
+        const collectionObj = db.collection(collectionName);
+        
+        // Obtener el total de documentos para la paginación
+        const total = await collectionObj.countDocuments();
         
         // Verificar si la colección existe
-        const count = await collectionObj.countDocuments();
-        console.log(`Número de documentos encontrados en ${collection}: ${count}`);
-        
-        if (count === 0) {
-            console.log(`La colección ${collection} está vacía`);
-            return res.json([]);
+        if (total === 0) {
+            console.log(`La colección ${collectionName} está vacía`);
+            return res.json({
+                data: [],
+                pagination: {
+                    total: 0,
+                    page: page,
+                    limit: limit,
+                    totalPages: 0
+                }
+            });
         }
         
-        const docs = await collectionObj.find().toArray();
-        console.log(`Datos encontrados en ${collection}:`, JSON.stringify(docs, null, 2));
+        // Obtener los documentos paginados
+        const docs = await collectionObj.find()
+            .skip(skip)
+            .limit(limit)
+            .toArray();
+            
+        console.log(`Datos encontrados en ${collectionName}: ${docs.length} documentos`);
         
-        res.json(docs);
+        res.json({
+            data: docs,
+            pagination: {
+                total: total,
+                page: page,
+                limit: limit,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
     } catch (error) {
         console.error(`Error obteniendo datos de ${req.params.collection}:`, error);
         res.status(500).json({ 
@@ -243,6 +337,8 @@ app.post('/api/auditoria', async (req, res) => {
             fecha: fechaActual,
             fechaISO: fechaActual.toISOString(),
             estado: 'completada',
+            finalizado: true,
+            procesadoIA: false,
             metadata: {
                 version: '1.0',
                 tipo: 'auditoria_seguridad',
@@ -337,13 +433,304 @@ app.get('/api/auditorias', async (req, res) => {
     }
 });
 
+// Función para obtener el siguiente número de secuencia
+async function getNextSequence(collectionName) {
+    try {
+        const db = mongoose.connection.db;
+        const result = await db.collection('counters').findOneAndUpdate(
+            { _id: collectionName },
+            { $inc: { sequence_value: 1 } },
+            { 
+                upsert: true,
+                returnDocument: 'after'
+            }
+        );
+        return result.value ? result.value.sequence_value : 1;
+    } catch (error) {
+        console.error(`Error al obtener secuencia para ${collectionName}:`, error);
+        return Date.now(); // Fallback a timestamp si hay error
+    }
+}
+
+// Endpoint para guardar borradores de auditoría
+app.post('/api/auditoria/borrador', async (req, res) => {
+    try {
+        const { respuestas, cliente, metadata } = req.body;
+        
+        if (!respuestas || !cliente || !metadata) {
+            console.error('Datos faltantes en la solicitud:', { respuestas, cliente, metadata });
+            return res.status(400).json({ 
+                error: 'Faltan datos requeridos',
+                details: 'Se requieren respuestas, cliente y metadata'
+            });
+        }
+
+        if (!mongoose.connection.readyState) {
+            throw new Error('No hay conexión con la base de datos');
+        }
+
+        const timestamp = Date.now();
+        const uniqueId = `BORRADOR_${timestamp}_${cliente.id}`;
+        const sequence = await getNextSequence('borradores');
+
+        const borradorData = {
+            _id: uniqueId,
+            sequence: sequence,
+            timestamp: timestamp,
+            updateCounter: Date.now(),
+            respuestas,
+            cliente,
+            fecha: new Date(),
+            fechaISO: new Date().toISOString(),
+            estado: 'borrador',
+            metadata: {
+                ...metadata,
+                ultimaModificacion: new Date().toISOString()
+            }
+        };
+
+        console.log('Intentando guardar borrador con datos:', JSON.stringify(borradorData, null, 2));
+
+        const db = mongoose.connection.db;
+        
+        // Verificar que la colección existe
+        const collections = await db.listCollections().toArray();
+        const borradoresExists = collections.some(col => col.name === 'Borradores');
+
+        if (!borradoresExists) {
+            console.log('Creando colección Borradores...');
+            await db.createCollection('Borradores');
+        }
+
+        // Verificar que la colección counters existe
+        const countersExists = collections.some(col => col.name === 'counters');
+        if (!countersExists) {
+            console.log('Creando colección counters...');
+            await db.createCollection('counters');
+            // Inicializar el contador para borradores
+            await db.collection('counters').insertOne({
+                _id: 'borradores',
+                sequence_value: 0
+            });
+        }
+
+        // Intentar guardar el borrador
+        try {
+            const result = await db.collection('Borradores').insertOne(borradorData);
+            
+            if (result.acknowledged) {
+                console.log('Borrador guardado exitosamente:', {
+                    id: uniqueId,
+                    timestamp: timestamp
+                });
+                res.status(200).json({
+                    id: uniqueId,
+                    message: 'Borrador guardado correctamente',
+                    timestamp: timestamp
+                });
+            } else {
+                throw new Error('No se recibió confirmación del servidor al guardar el borrador');
+            }
+        } catch (dbError) {
+            console.error('Error específico de base de datos:', dbError);
+            throw new Error(`Error al guardar en la base de datos: ${dbError.message}`);
+        }
+    } catch (error) {
+        console.error('Error al guardar borrador:', error);
+        res.status(500).json({ 
+            error: 'Error al guardar el borrador',
+            details: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
+    }
+});
+
+// Endpoint para obtener todos los activos sin paginación
+app.get('/api/tfm/Activos/all', async (req, res) => {
+    try {
+        const db = mongoose.connection.db;
+        const collectionObj = db.collection('Activos');
+        
+        // Obtener todos los documentos sin paginación
+        const docs = await collectionObj.find().toArray();
+            
+        console.log(`Datos encontrados en Activos: ${docs.length} documentos`);
+        
+        res.json(docs);
+    } catch (error) {
+        console.error('Error obteniendo todos los activos:', error);
+        res.status(500).json({ 
+            error: error.message,
+            details: 'Error al obtener todos los activos'
+        });
+    }
+});
+
+// Endpoint para obtener borradores guardados por usuario
+app.get('/api/auditoria/borrador/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        if (!mongoose.connection.readyState) {
+            throw new Error('No hay conexión con la base de datos');
+        }
+
+        const db = mongoose.connection.db;
+        const borradores = await db.collection('Borradores')
+            .find({ 
+                'cliente.id': userId,
+                estado: 'borrador'
+            })
+            .sort({ timestamp: -1 })
+            .toArray();
+
+        res.json(borradores);
+    } catch (error) {
+        console.error('Error al obtener borradores:', error);
+        res.status(500).json({ 
+            error: 'Error al obtener los borradores',
+            details: error.message
+        });
+    }
+});
+
+// Obtener auditoría en progreso de un usuario
+app.get('/api/auditoria/en-progreso/:userId', async (req, res) => {
+    try {
+        const { userId } = req.params;
+        
+        // Buscar la auditoría en progreso más reciente del usuario
+        const auditoria = await auditoriasCollection.findOne(
+            { 
+                'cliente.id': userId,
+                estado: 'en_progreso'
+            },
+            { sort: { ultimaModificacion: -1 } }
+        );
+        
+        if (!auditoria) {
+            return res.status(404).json({ message: 'No se encontró una auditoría en progreso' });
+        }
+        
+        res.json(auditoria);
+    } catch (error) {
+        console.error('Error al obtener auditoría en progreso:', error);
+        res.status(500).json({ error: 'Error al obtener la auditoría en progreso' });
+    }
+});
+
+// Crear nueva auditoría en progreso
+app.post('/api/auditoria/en-progreso', async (req, res) => {
+    try {
+        const { respuestas, cliente } = req.body;
+        
+        const auditoriaData = {
+            _id: new ObjectId(),
+            respuestas,
+            cliente,
+            estado: 'en_progreso',
+            fechaCreacion: new Date().toISOString(),
+            ultimaModificacion: new Date().toISOString(),
+            procesadoIA: false
+        };
+        
+        const result = await auditoriasCollection.insertOne(auditoriaData);
+        
+        if (result.acknowledged) {
+            res.json({ 
+                _id: auditoriaData._id,
+                message: 'Auditoría en progreso creada correctamente'
+            });
+        } else {
+            throw new Error('Error al crear la auditoría');
+        }
+    } catch (error) {
+        console.error('Error al crear auditoría en progreso:', error);
+        res.status(500).json({ error: 'Error al crear la auditoría en progreso' });
+    }
+});
+
+// Actualizar auditoría en progreso
+app.put('/api/auditoria/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { respuestas, cliente, ultimaModificacion } = req.body;
+        
+        // Obtener la auditoría actual
+        const auditoriaActual = await auditoriasCollection.findOne({ _id: new ObjectId(id) });
+        
+        if (!auditoriaActual) {
+            return res.status(404).json({ error: 'No se encontró la auditoría para actualizar' });
+        }
+        
+        // Fusionar las respuestas existentes con las nuevas
+        const respuestasActualizadas = {
+            ...auditoriaActual.respuestas,
+            ...respuestas
+        };
+        
+        const updateData = {
+            $set: {
+                respuestas: respuestasActualizadas,
+                ultimaModificacion: new Date().toISOString()
+            }
+        };
+        
+        const result = await auditoriasCollection.updateOne(
+            { _id: new ObjectId(id) },
+            updateData
+        );
+        
+        if (result.modifiedCount > 0) {
+            res.json({ 
+                message: 'Auditoría actualizada correctamente',
+                respuestas: respuestasActualizadas
+            });
+        } else {
+            res.status(404).json({ error: 'No se encontró la auditoría para actualizar' });
+        }
+    } catch (error) {
+        console.error('Error al actualizar auditoría:', error);
+        res.status(500).json({ error: 'Error al actualizar la auditoría' });
+    }
+});
+
+// Finalizar auditoría
+app.put('/api/auditoria/:id/finalizar', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { estado, finalizado, procesadoIA, ultimaModificacion } = req.body;
+        
+        const updateData = {
+            $set: {
+                estado: 'completada',
+                finalizado: true,
+                procesadoIA: false,
+                ultimaModificacion: new Date().toISOString()
+            }
+        };
+        
+        const result = await auditoriasCollection.updateOne(
+            { _id: new ObjectId(id) },
+            updateData
+        );
+        
+        if (result.modifiedCount > 0) {
+            res.json({ message: 'Auditoría finalizada correctamente' });
+        } else {
+            res.status(404).json({ error: 'No se encontró la auditoría para finalizar' });
+        }
+    } catch (error) {
+        console.error('Error al finalizar auditoría:', error);
+        res.status(500).json({ error: 'Error al finalizar la auditoría' });
+    }
+});
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Backend server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Backend server running on http://0.0.0.0:${PORT}`);
     console.log('Available routes:');
-    console.log('- GET /api/activos');
-    console.log('- GET /api/amenazas');
-    console.log('- GET /api/vulnerabilidades');
-    console.log('- GET /api/salvaguardas');
-    console.log('- GET /api/relaciones');
+    console.log('- GET /api/test');
+    console.log('- GET /api/mongodb-status');
+    console.log('- GET /api/tfm/:collection');
 }); 
