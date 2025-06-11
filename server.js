@@ -7,7 +7,12 @@ require('dotenv').config();
 const app = express();
 
 // Configuración de CORS
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://lkwgcow8ks8gocg8ss0k4c8g.5.135.131.59.sslip.io'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 // Middleware para logging
 app.use((req, res, next) => {
