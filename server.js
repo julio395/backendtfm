@@ -7,26 +7,11 @@ require('dotenv').config();
 const app = express();
 
 // Configuración de CORS
-const allowedOrigins = [
-    'http://localhost:3000',
-    'https://projectfm.julio.coolify.hgccarlos.es',
-    'https://backend-tfm.julio.coolify.hgccarlos.es'
-];
-
 app.use(cors({
-    origin: function(origin, callback) {
-        // Permitir solicitudes sin origen (como aplicaciones móviles o curl)
-        if (!origin) return callback(null, true);
-        
-        if (allowedOrigins.indexOf(origin) === -1) {
-            const msg = 'La política CORS para este sitio no permite acceso desde el origen especificado.';
-            return callback(new Error(msg), false);
-        }
-        return callback(null, true);
-    },
-    credentials: true,
+    origin: '*', // Permitir todas las solicitudes durante el desarrollo
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    credentials: true
 }));
 
 // Middleware para logging
@@ -64,6 +49,11 @@ app.get('/api/mongodb-status', async (req, res) => {
 app.get('/test', (req, res) => {
     console.log('Test endpoint hit');
     res.json({ message: 'Backend is working!' });
+});
+
+// Endpoint para verificar el estado del servidor
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Configuración de MongoDB
@@ -591,6 +581,11 @@ app.post('/api/auditoria/borrador', async (req, res) => {
 app.get('/api/tfm/Activos/all', async (req, res) => {
     try {
         console.log('Intentando obtener todos los activos...');
+        
+        if (!mongoose.connection.readyState) {
+            throw new Error('No hay conexión con la base de datos');
+        }
+
         const db = mongoose.connection.db;
         const collectionObj = db.collection('Activos');
         
