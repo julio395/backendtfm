@@ -6,20 +6,30 @@ require('dotenv').config();
 
 const app = express();
 
-// Configuración de CORS
-app.use(cors({
-    origin: '*', // Permitir todas las solicitudes durante el desarrollo
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-    credentials: true
-}));
-
-// Middleware para logging
+// Middleware para logging de todas las solicitudes
 app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    console.log('Headers:', req.headers);
     next();
 });
 
+// Configuración de CORS
+app.use((req, res, next) => {
+    console.log('Configurando CORS para solicitud:', req.url);
+    res.header('Access-Control-Allow-Origin', 'https://projectfm.julio.coolify.hgccarlos.es');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
+    // Manejar preflight requests
+    if (req.method === 'OPTIONS') {
+        console.log('Manejando solicitud OPTIONS');
+        return res.status(200).end();
+    }
+    next();
+});
+
+// Middleware para parsear JSON
 app.use(express.json());
 
 // Ruta de prueba
@@ -53,7 +63,15 @@ app.get('/test', (req, res) => {
 
 // Endpoint para verificar el estado del servidor
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    console.log('Verificando estado del servidor');
+    const status = {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+        uptime: process.uptime()
+    };
+    console.log('Estado del servidor:', status);
+    res.json(status);
 });
 
 // Configuración de MongoDB
@@ -106,6 +124,7 @@ process.on('unhandledRejection', (error) => {
     console.error('Promesa rechazada no manejada:', error);
 });
 
+console.log('Iniciando conexión a MongoDB...');
 // Conectar a MongoDB
 mongoose.connect(MONGODB_URI, {
     useNewUrlParser: true,
@@ -120,6 +139,7 @@ mongoose.connect(MONGODB_URI, {
 })
 .catch((error) => {
     console.error('Error al conectar a MongoDB:', error);
+    console.error('Stack trace:', error.stack);
     process.exit(1);
 });
 
@@ -130,6 +150,7 @@ mongoose.connection.on('connected', () => {
 
 mongoose.connection.on('error', (err) => {
     console.error('Error en la conexión de Mongoose:', err);
+    console.error('Stack trace:', err.stack);
 });
 
 mongoose.connection.on('disconnected', () => {
@@ -151,13 +172,17 @@ process.on('SIGINT', async () => {
 // Iniciar el servidor
 const startServer = async () => {
     try {
-        // Luego iniciar el servidor Express
         const PORT = process.env.PORT || 5000;
         app.listen(PORT, () => {
             console.log(`Servidor corriendo en puerto ${PORT}`);
+            console.log('Configuración del servidor:');
+            console.log('- Puerto:', PORT);
+            console.log('- Entorno:', process.env.NODE_ENV || 'development');
+            console.log('- MongoDB URI:', MONGODB_URI.replace(/:[^:@]*@/, ':****@')); // Ocultar credenciales en logs
         });
     } catch (error) {
         console.error('Error al iniciar el servidor:', error);
+        console.error('Stack trace:', error.stack);
         process.exit(1);
     }
 };
@@ -583,13 +608,15 @@ app.get('/api/tfm/Activos/all', async (req, res) => {
         console.log('Intentando obtener todos los activos...');
         
         if (!mongoose.connection.readyState) {
+            console.error('No hay conexión con MongoDB. Estado:', mongoose.connection.readyState);
             throw new Error('No hay conexión con la base de datos');
         }
 
+        console.log('Conexión a MongoDB establecida, obteniendo colección Activos...');
         const db = mongoose.connection.db;
         const collectionObj = db.collection('Activos');
         
-        // Obtener todos los documentos sin paginación
+        console.log('Ejecutando consulta find()...');
         const docs = await collectionObj.find().toArray();
             
         console.log(`Datos encontrados en Activos: ${docs.length} documentos`);
@@ -599,9 +626,11 @@ app.get('/api/tfm/Activos/all', async (req, res) => {
             return res.json([]);
         }
         
+        console.log('Enviando respuesta con activos...');
         res.json(docs);
     } catch (error) {
         console.error('Error detallado al obtener activos:', error);
+        console.error('Stack trace:', error.stack);
         res.status(500).json({ 
             error: error.message,
             details: 'Error al obtener todos los activos',
@@ -768,13 +797,4 @@ app.put('/api/auditoria/:id/finalizar', async (req, res) => {
         console.error('Error al finalizar auditoría:', error);
         res.status(500).json({ error: 'Error al finalizar la auditoría' });
     }
-});
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Backend server running on http://0.0.0.0:${PORT}`);
-    console.log('Available routes:');
-    console.log('- GET /api/test');
-    console.log('- GET /api/mongodb-status');
-    console.log('- GET /api/tfm/:collection');
 }); 
