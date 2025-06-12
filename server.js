@@ -9,8 +9,7 @@ const app = express();
 // Configuración de CORS
 const allowedOrigins = [
     'http://localhost:3000',
-    'http://lkwgcow8ks8gocg8ss0k4c8g.5.135.131.59.sslip.io',
-    'https://lkwgcow8ks8gocg8ss0k4c8g.5.135.131.59.sslip.io'
+    'https://projectfm.julio.coolify.hgccarlos.es',
 ];
 
 app.use(cors({
