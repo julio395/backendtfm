@@ -126,20 +126,23 @@ process.on('unhandledRejection', (error) => {
 
 console.log('Iniciando conexión a MongoDB...');
 // Conectar a MongoDB
-mongoose.connect(MONGODB_URI, {
+mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 45000,
+    dbName: 'backend-tfm'
 })
 .then(async () => {
-    console.log('Conexión exitosa a MongoDB');
-    console.log('Base de datos:', mongoose.connection.db.databaseName);
+    console.log('=== Conexión a MongoDB establecida ===');
+    console.log('URI de conexión:', process.env.MONGODB_URI);
+    console.log('Base de datos:', 'backend-tfm');
+    console.log('Estado de la conexión:', mongoose.connection.readyState);
     await initializeCollections();
 })
-.catch((error) => {
-    console.error('Error al conectar a MongoDB:', error);
-    console.error('Stack trace:', error.stack);
+.catch(err => {
+    console.error('=== Error al conectar con MongoDB ===');
+    console.error('Error:', err);
+    console.error('URI de conexión:', process.env.MONGODB_URI);
+    console.error('Estado de la conexión:', mongoose.connection.readyState);
     process.exit(1);
 });
 
@@ -178,7 +181,7 @@ const startServer = async () => {
             console.log('Configuración del servidor:');
             console.log('- Puerto:', PORT);
             console.log('- Entorno:', process.env.NODE_ENV || 'development');
-            console.log('- MongoDB URI:', MONGODB_URI.replace(/:[^:@]*@/, ':****@')); // Ocultar credenciales en logs
+            console.log('- MongoDB URI:', process.env.MONGODB_URI.replace(/:[^:@]*@/, ':****@')); // Ocultar credenciales en logs
         });
     } catch (error) {
         console.error('Error al iniciar el servidor:', error);
@@ -605,7 +608,8 @@ app.post('/api/auditoria/borrador', async (req, res) => {
 // Endpoint para obtener todos los activos sin paginación
 app.get('/api/tfm/Activos/all', async (req, res) => {
     try {
-        console.log('Intentando obtener todos los activos...');
+        console.log('=== Iniciando petición de activos ===');
+        console.log('Estado de conexión MongoDB:', mongoose.connection.readyState);
         
         // Verificar conexión a MongoDB
         if (!mongoose.connection.readyState) {
