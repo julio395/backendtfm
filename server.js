@@ -86,7 +86,7 @@ const checkMongoConnection = (req, res, next) => {
 };
 
 // Endpoint de health check mejorado
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
     console.log('=== Health Check ===');
     const health = {
         status: 'ok',
@@ -94,13 +94,16 @@ app.get('/api/health', (req, res) => {
         mongodb: {
             status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
             state: mongoose.connection.readyState,
-            database: mongoose.connection.db?.databaseName
+            database: mongoose.connection.db?.databaseName,
+            host: mongoose.connection.host,
+            port: mongoose.connection.port
         },
         uptime: process.uptime(),
         memory: process.memoryUsage(),
         env: {
             node_env: process.env.NODE_ENV,
-            port: process.env.PORT
+            port: process.env.PORT,
+            mongodb_uri: process.env.MONGODB_URI.replace(/:[^:@]*@/, ':****@')
         }
     };
     console.log('Estado del servidor:', health);
@@ -110,7 +113,8 @@ app.get('/api/health', (req, res) => {
         return res.status(503).json({
             ...health,
             status: 'error',
-            error: 'MongoDB no está conectado'
+            error: 'MongoDB no está conectado',
+            connection_state: mongoose.connection.readyState
         });
     }
     
@@ -118,12 +122,32 @@ app.get('/api/health', (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/backend-tfm';
-const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'backend-tfm';
+mongoose.connect('mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true', {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    dbName: 'backend-tfm'
+})
+.then(() => {
+    console.log('Conexión exitosa a MongoDB');
+    console.log('Base de datos:', mongoose.connection.db.databaseName);
+})
+.catch(err => {
+    console.error('Error al conectar a MongoDB:', err);
+    process.exit(1);
+});
 
-console.log('=== Configuración de MongoDB ===');
-console.log('URI:', MONGODB_URI.replace(/:[^:@]*@/, ':****@')); // Ocultar credenciales en logs
-console.log('Base de datos:', MONGODB_DB_NAME);
+// Manejar eventos de conexión
+mongoose.connection.on('connected', () => {
+    console.log('MongoDB conectado');
+});
+
+mongoose.connection.on('error', (err) => {
+    console.error('Error en la conexión de MongoDB:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('MongoDB desconectado');
+});
 
 // Inicialización de colecciones
 const collections = [
@@ -176,22 +200,44 @@ console.log('Iniciando conexión a MongoDB...');
 // Conexión a MongoDB con reintentos
 const connectWithRetry = async () => {
     try {
-        console.log('Intentando conectar a MongoDB...');
-        await mongoose.connect(MONGODB_URI, {
+        console.log('=== Intentando conectar a MongoDB ===');
+        console.log('Estado actual de la conexión:', mongoose.connection.readyState);
+        
+        // Cerrar conexión existente si hay una
+        if (mongoose.connection.readyState !== 0) {
+            console.log('Cerrando conexión existente...');
+            await mongoose.connection.close();
+        }
+
+        // Configuración de la conexión
+        const options = {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            dbName: MONGODB_DB_NAME,
-            serverSelectionTimeoutMS: 5000,
+            dbName: 'backend-tfm',
+            serverSelectionTimeoutMS: 30000,
             socketTimeoutMS: 45000,
             retryWrites: true,
-            retryReads: true
-        });
-        console.log('Conexión exitosa a MongoDB');
+            retryReads: true,
+            maxPoolSize: 10,
+            minPoolSize: 5
+        };
+
+        // Intentar conexión
+        await mongoose.connect('mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true', options);
+        
+        console.log('=== Conexión exitosa a MongoDB ===');
         console.log('Base de datos:', mongoose.connection.db.databaseName);
         console.log('Estado de la conexión:', mongoose.connection.readyState);
+        
+        // Verificar que podemos acceder a la base de datos
+        const collections = await mongoose.connection.db.listCollections().toArray();
+        console.log('Colecciones disponibles:', collections.map(c => c.name));
+        
         await initializeCollections();
     } catch (error) {
-        console.error('Error al conectar a MongoDB:', error);
+        console.error('=== Error al conectar a MongoDB ===');
+        console.error('Error:', error.message);
+        console.error('Estado de la conexión:', mongoose.connection.readyState);
         console.error('Reintentando en 5 segundos...');
         setTimeout(connectWithRetry, 5000);
     }
@@ -199,54 +245,6 @@ const connectWithRetry = async () => {
 
 // Iniciar conexión
 connectWithRetry();
-
-// Manejar eventos de conexión
-mongoose.connection.on('connected', () => {
-    console.log('MongoDB conectado');
-});
-
-mongoose.connection.on('error', (err) => {
-    console.error('Error en la conexión de MongoDB:', err);
-});
-
-mongoose.connection.on('disconnected', () => {
-    console.log('MongoDB desconectado');
-    console.log('Reintentando conexión...');
-    connectWithRetry();
-});
-
-// Manejar cierre de la aplicación
-process.on('SIGINT', async () => {
-    try {
-        await mongoose.connection.close();
-        console.log('Conexión a MongoDB cerrada por terminación de la aplicación');
-        process.exit(0);
-    } catch (err) {
-        console.error('Error al cerrar la conexión a MongoDB:', err);
-        process.exit(1);
-    }
-});
-
-// Iniciar el servidor
-const startServer = async () => {
-    try {
-        const PORT = process.env.PORT || 5000;
-        app.listen(PORT, () => {
-            console.log(`Servidor corriendo en puerto ${PORT}`);
-            console.log('Configuración del servidor:');
-            console.log('- Puerto:', PORT);
-            console.log('- Entorno:', process.env.NODE_ENV || 'development');
-            console.log('- MongoDB URI:', process.env.MONGODB_URI.replace(/:[^:@]*@/, ':****@')); // Ocultar credenciales en logs
-        });
-    } catch (error) {
-        console.error('Error al iniciar el servidor:', error);
-        console.error('Stack trace:', error.stack);
-        process.exit(1);
-    }
-};
-
-// Iniciar el servidor
-startServer();
 
 // Ruta de prueba para verificar la conexión
 app.get('/api/test', async (req, res) => {
