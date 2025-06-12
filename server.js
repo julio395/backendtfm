@@ -15,17 +15,23 @@ app.use((req, res, next) => {
 
 // Configuración de CORS
 app.use((req, res, next) => {
-    console.log('Configurando CORS para solicitud:', req.url);
+    console.log('=== Nueva petición recibida ===');
+    console.log('Origen:', req.headers.origin);
+    console.log('Método:', req.method);
+    console.log('URL:', req.url);
+    
+    // Permitir peticiones desde el frontend
     res.header('Access-Control-Allow-Origin', 'https://projectfm.julio.coolify.hgccarlos.es');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     res.header('Access-Control-Allow-Credentials', 'true');
     
     // Manejar preflight requests
     if (req.method === 'OPTIONS') {
-        console.log('Manejando solicitud OPTIONS');
+        console.log('Manejando preflight request');
         return res.status(200).end();
     }
+    
     next();
 });
 
@@ -63,15 +69,15 @@ app.get('/test', (req, res) => {
 
 // Endpoint para verificar el estado del servidor
 app.get('/api/health', (req, res) => {
-    console.log('Verificando estado del servidor');
-    const status = {
+    const health = {
         status: 'ok',
-        timestamp: new Date().toISOString(),
-        mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-        uptime: process.uptime()
+        timestamp: new Date(),
+        mongodb: {
+            status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+            state: mongoose.connection.readyState
+        }
     };
-    console.log('Estado del servidor:', status);
-    res.json(status);
+    res.json(health);
 });
 
 // Configuración de MongoDB
@@ -847,4 +853,20 @@ app.put('/api/auditoria/:id/finalizar', async (req, res) => {
         console.error('Error al finalizar auditoría:', error);
         res.status(500).json({ error: 'Error al finalizar la auditoría' });
     }
+});
+
+// Middleware para logging de errores
+app.use((err, req, res, next) => {
+    console.error('=== Error en la aplicación ===');
+    console.error('Error:', err);
+    console.error('Stack:', err.stack);
+    console.error('URL:', req.url);
+    console.error('Método:', req.method);
+    console.error('Headers:', req.headers);
+    
+    res.status(500).json({
+        error: 'Error interno del servidor',
+        details: err.message,
+        path: req.url
+    });
 }); 
