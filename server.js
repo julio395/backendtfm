@@ -87,45 +87,39 @@ const checkMongoConnection = (req, res, next) => {
 
 // Endpoint de health check mejorado
 app.get('/api/health', async (req, res) => {
-    console.log('=== Health Check ===');
-    const health = {
-        status: 'ok',
-        timestamp: new Date(),
-        mongodb: {
-            status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-            state: mongoose.connection.readyState,
-            database: mongoose.connection.db?.databaseName,
-            host: mongoose.connection.host,
-            port: mongoose.connection.port
-        },
-        uptime: process.uptime(),
-        memory: process.memoryUsage(),
-        env: {
-            node_env: process.env.NODE_ENV,
-            port: process.env.PORT,
-            mongodb_uri: process.env.MONGODB_URI.replace(/:[^:@]*@/, ':****@')
-        }
-    };
-    console.log('Estado del servidor:', health);
-    
-    // Si MongoDB no está conectado, devolver 503
-    if (mongoose.connection.readyState !== 1) {
-        return res.status(503).json({
-            ...health,
+    try {
+        const mongoStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+        const collections = await mongoose.connection.db.listCollections().toArray();
+        
+        res.json({
+            status: 'ok',
+            timestamp: new Date().toISOString(),
+            mongodb: {
+                status: mongoStatus,
+                collections: collections.map(c => c.name),
+                database: mongoose.connection.db.databaseName
+            },
+            memory: process.memoryUsage()
+        });
+    } catch (error) {
+        console.error('Error en health check:', error);
+        res.status(500).json({
             status: 'error',
-            error: 'MongoDB no está conectado',
-            connection_state: mongoose.connection.readyState
+            error: error.message,
+            mongodb: {
+                status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+            }
         });
     }
-    
-    res.json(health);
 });
 
 // Configuración de MongoDB
 mongoose.connect('mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    dbName: 'backend-tfm'
+    dbName: 'backend-tfm',
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
 })
 .then(() => {
     console.log('Conexión exitosa a MongoDB');
@@ -905,4 +899,13 @@ app.use((err, req, res, next) => {
         details: err.message,
         path: req.url
     });
+});
+
+// Iniciar el servidor
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor corriendo en puerto ${PORT}`);
+    console.log('Configuración del servidor:');
+    console.log('- Puerto:', PORT);
+    console.log('- Entorno:', process.env.NODE_ENV || 'development');
 }); 
