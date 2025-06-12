@@ -607,13 +607,33 @@ app.get('/api/tfm/Activos/all', async (req, res) => {
     try {
         console.log('Intentando obtener todos los activos...');
         
+        // Verificar conexión a MongoDB
         if (!mongoose.connection.readyState) {
             console.error('No hay conexión con MongoDB. Estado:', mongoose.connection.readyState);
-            throw new Error('No hay conexión con la base de datos');
+            return res.status(500).json({ 
+                error: 'Error de conexión a la base de datos',
+                details: 'El servidor no puede conectarse a MongoDB',
+                state: mongoose.connection.readyState
+            });
         }
 
         console.log('Conexión a MongoDB establecida, obteniendo colección Activos...');
         const db = mongoose.connection.db;
+        
+        // Verificar que la colección existe
+        const collections = await db.listCollections().toArray();
+        const collectionNames = collections.map(c => c.name);
+        console.log('Colecciones disponibles:', collectionNames);
+        
+        if (!collectionNames.includes('Activos')) {
+            console.error('La colección Activos no existe');
+            return res.status(500).json({ 
+                error: 'Colección no encontrada',
+                details: 'La colección Activos no existe en la base de datos',
+                availableCollections: collectionNames
+            });
+        }
+
         const collectionObj = db.collection('Activos');
         
         console.log('Ejecutando consulta find()...');
@@ -625,15 +645,41 @@ app.get('/api/tfm/Activos/all', async (req, res) => {
             console.log('No se encontraron activos en la base de datos');
             return res.json([]);
         }
+
+        // Verificar la estructura de los documentos
+        const firstDoc = docs[0];
+        console.log('Estructura del primer documento:', Object.keys(firstDoc));
+        
+        // Filtrar documentos inválidos
+        const validDocs = docs.filter(doc => doc && typeof doc === 'object');
+        console.log(`Documentos válidos: ${validDocs.length} de ${docs.length}`);
+        
+        if (validDocs.length === 0) {
+            console.error('No hay documentos válidos en la colección');
+            return res.status(500).json({ 
+                error: 'Datos inválidos',
+                details: 'No se encontraron documentos válidos en la colección Activos'
+            });
+        }
         
         console.log('Enviando respuesta con activos...');
-        res.json(docs);
+        res.json(validDocs);
     } catch (error) {
         console.error('Error detallado al obtener activos:', error);
         console.error('Stack trace:', error.stack);
+        
+        // Determinar el tipo de error
+        let errorDetails = 'Error al obtener todos los activos';
+        if (error.name === 'MongoError') {
+            errorDetails = 'Error de MongoDB: ' + error.message;
+        } else if (error.name === 'MongooseError') {
+            errorDetails = 'Error de Mongoose: ' + error.message;
+        }
+        
         res.status(500).json({ 
             error: error.message,
-            details: 'Error al obtener todos los activos',
+            details: errorDetails,
+            type: error.name,
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
