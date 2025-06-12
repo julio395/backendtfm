@@ -10,6 +10,7 @@ const app = express();
 const allowedOrigins = [
     'http://localhost:3000',
     'https://projectfm.julio.coolify.hgccarlos.es',
+    'https://backend-tfm.julio.coolify.hgccarlos.es'
 ];
 
 app.use(cors({
@@ -116,32 +117,54 @@ process.on('unhandledRejection', (error) => {
 });
 
 // Conectar a MongoDB
-const connectDB = async () => {
+mongoose.connect(MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+})
+.then(async () => {
+    console.log('Conexión exitosa a MongoDB');
+    console.log('Base de datos:', mongoose.connection.db.databaseName);
+    await initializeCollections();
+})
+.catch((error) => {
+    console.error('Error al conectar a MongoDB:', error);
+    process.exit(1);
+});
+
+// Manejar eventos de conexión
+mongoose.connection.on('connected', () => {
+    console.log('Mongoose conectado a MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+    console.error('Error en la conexión de Mongoose:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log('Mongoose desconectado de MongoDB');
+});
+
+// Manejar cierre de la aplicación
+process.on('SIGINT', async () => {
     try {
-        console.log('Intentando conectar a MongoDB...');
-        await mongoose.connect(MONGODB_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            dbName: 'tfm'
-        });
-        
-        console.log('Conectado a MongoDB - Base de datos: tfm');
-        await initializeCollections();
-    } catch (error) {
-        console.error('Error al conectar a MongoDB:', error);
+        await mongoose.connection.close();
+        console.log('Conexión a MongoDB cerrada por terminación de la aplicación');
+        process.exit(0);
+    } catch (err) {
+        console.error('Error al cerrar la conexión a MongoDB:', err);
         process.exit(1);
     }
-};
+});
 
 // Iniciar el servidor
 const startServer = async () => {
     try {
-        // Primero conectar a MongoDB
-        await connectDB();
-
         // Luego iniciar el servidor Express
+        const PORT = process.env.PORT || 5000;
         app.listen(PORT, () => {
-            console.log(`Servidor corriendo en http://localhost:${PORT}`);
+            console.log(`Servidor corriendo en puerto ${PORT}`);
         });
     } catch (error) {
         console.error('Error al iniciar el servidor:', error);
@@ -149,7 +172,7 @@ const startServer = async () => {
     }
 };
 
-// Iniciar la aplicación
+// Iniciar el servidor
 startServer();
 
 // Ruta de prueba para verificar la conexión
@@ -567,6 +590,7 @@ app.post('/api/auditoria/borrador', async (req, res) => {
 // Endpoint para obtener todos los activos sin paginación
 app.get('/api/tfm/Activos/all', async (req, res) => {
     try {
+        console.log('Intentando obtener todos los activos...');
         const db = mongoose.connection.db;
         const collectionObj = db.collection('Activos');
         
@@ -575,12 +599,18 @@ app.get('/api/tfm/Activos/all', async (req, res) => {
             
         console.log(`Datos encontrados en Activos: ${docs.length} documentos`);
         
+        if (docs.length === 0) {
+            console.log('No se encontraron activos en la base de datos');
+            return res.json([]);
+        }
+        
         res.json(docs);
     } catch (error) {
-        console.error('Error obteniendo todos los activos:', error);
+        console.error('Error detallado al obtener activos:', error);
         res.status(500).json({ 
             error: error.message,
-            details: 'Error al obtener todos los activos'
+            details: 'Error al obtener todos los activos',
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });
