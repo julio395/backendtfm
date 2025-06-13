@@ -8,10 +8,11 @@ const app = express();
 
 // Configuración de CORS
 const corsOptions = {
-    origin: '*',
+    origin: 'https://projectfm.julio.coolify.hgccarlos.es',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-    credentials: true
+    credentials: true,
+    optionsSuccessStatus: 200
 };
 
 app.use(cors(corsOptions));
@@ -22,6 +23,9 @@ app.use((req, res, next) => {
     console.log('Headers:', req.headers);
     next();
 });
+
+// Middleware para parsear JSON
+app.use(express.json());
 
 // Ruta de prueba
 app.get('/api/test', (req, res) => {
