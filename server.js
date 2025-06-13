@@ -86,37 +86,15 @@ app.get('/test', (req, res) => {
 // Middleware para verificar la conexión a MongoDB
 const checkMongoConnection = async (req, res, next) => {
     try {
-        console.log('=== Verificando conexión a MongoDB ===');
-        console.log('Estado de conexión:', mongoose.connection.readyState);
-        console.log('URI:', MONGODB_URI);
-        
         if (mongoose.connection.readyState !== 1) {
             console.log('Conexión no establecida, intentando reconectar...');
-            try {
-                await connectToMongoDB();
-            } catch (error) {
-                console.error('Error al reconectar:', error);
-                return res.status(503).json({
-                    status: 'error',
-                    message: 'No hay conexión con la base de datos',
-                    details: error.message
-                });
-            }
+            await connectToMongoDB();
         }
-
-        // Verificar que podemos acceder a la base de datos
-        const db = mongoose.connection.db;
-        console.log('Base de datos:', db.databaseName);
-        
-        const collections = await db.listCollections().toArray();
-        console.log('Colecciones disponibles:', collections.map(c => c.name));
-        
         next();
     } catch (error) {
-        console.error('Error en checkMongoConnection:', error);
+        console.error('Error al verificar conexión MongoDB:', error);
         res.status(503).json({
-            status: 'error',
-            message: 'No hay conexión con la base de datos',
+            error: 'Error de conexión a la base de datos',
             details: error.message
         });
     }
@@ -197,8 +175,6 @@ const connectToMongoDB = async () => {
         // Verificar que podemos acceder a la base de datos
         const collections = await mongoose.connection.db.listCollections().toArray();
         console.log('Colecciones disponibles:', collections.map(c => c.name));
-        
-        await initializeCollections();
     } catch (error) {
         console.error('=== Error al conectar a MongoDB ===');
         console.error('Error:', error.message);
@@ -753,16 +729,11 @@ app.post('/api/auditoria/borrador', async (req, res) => {
     }
 });
 
-// Endpoint para obtener todos los activos sin paginación
-app.get('/api/tfm/Activos/all', async (req, res) => {
+// Endpoint para obtener todos los activos
+app.get('/api/tfm/Activos/all', checkMongoConnection, async (req, res) => {
     try {
         console.log('=== Iniciando petición de activos ===');
         console.log('Estado de conexión MongoDB:', mongoose.connection.readyState);
-        
-        if (mongoose.connection.readyState !== 1) {
-            console.log('Conexión no establecida, intentando reconectar...');
-            await connectToMongoDB();
-        }
         
         const db = mongoose.connection.db;
         console.log('Base de datos:', db.databaseName);
