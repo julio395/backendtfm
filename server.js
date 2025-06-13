@@ -85,23 +85,41 @@ app.get('/test', (req, res) => {
 });
 
 // Middleware para verificar la conexión a MongoDB
-const checkMongoConnection = (req, res, next) => {
-    console.log('=== Verificando conexión a MongoDB ===');
-    console.log('Estado de conexión:', mongoose.connection.readyState);
-    console.log('URI:', MONGODB_URI);
-    
-    if (mongoose.connection.readyState !== 1) {
-        console.error('No hay conexión con MongoDB');
-        // Intentar reconectar
-        connectToMongoDB();
-        return res.status(503).json({
-            error: 'Servicio no disponible',
-            details: 'No hay conexión con la base de datos',
-            state: mongoose.connection.readyState,
-            timestamp: new Date()
+const checkMongoConnection = async (req, res, next) => {
+    try {
+        console.log('=== Verificando conexión a MongoDB ===');
+        console.log('Estado de conexión:', mongoose.connection.readyState);
+        
+        if (mongoose.connection.readyState !== 1) {
+            console.log('Conexión no establecida, intentando reconectar...');
+            try {
+                await connectToMongoDB();
+            } catch (error) {
+                console.error('Error al reconectar:', error);
+                return res.status(503).json({
+                    status: 'error',
+                    message: 'No hay conexión con la base de datos',
+                    details: error.message
+                });
+            }
+        }
+
+        // Verificar que podemos acceder a la base de datos
+        const db = mongoose.connection.db;
+        console.log('Base de datos:', db.databaseName);
+        
+        const collections = await db.listCollections().toArray();
+        console.log('Colecciones disponibles:', collections.map(c => c.name));
+        
+        next();
+    } catch (error) {
+        console.error('Error en checkMongoConnection:', error);
+        res.status(503).json({
+            status: 'error',
+            message: 'No hay conexión con la base de datos',
+            details: error.message
         });
     }
-    next();
 };
 
 // Endpoint de health check mejorado
@@ -186,11 +204,7 @@ const connectToMongoDB = async () => {
         console.error('Error:', error.message);
         console.error('Stack:', error.stack);
         console.error('Estado de la conexión:', mongoose.connection.readyState);
-        console.error('Reintentando en 5 segundos...');
-        
-        // Esperar 5 segundos antes de reintentar
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        return connectToMongoDB();
+        throw error;
     }
 };
 
