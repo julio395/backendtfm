@@ -114,21 +114,55 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-mongoose.connect('mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true', {
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true';
+const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
     dbName: 'tfm',
-    serverSelectionTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000,
-})
-.then(() => {
-    console.log('Conexión exitosa a MongoDB');
-    console.log('Base de datos:', mongoose.connection.db.databaseName);
-})
-.catch(err => {
-    console.error('Error al conectar a MongoDB:', err);
-    process.exit(1);
-});
+    connectTimeoutMS: 30000,
+    retryWrites: true,
+    retryReads: true,
+    maxPoolSize: 10,
+    minPoolSize: 5,
+    heartbeatFrequencyMS: 10000,
+    keepAlive: true,
+    keepAliveInitialDelay: 300000
+};
+
+// Función para conectar a MongoDB
+const connectToMongoDB = async () => {
+    try {
+        console.log('=== Intentando conectar a MongoDB ===');
+        console.log('Estado actual de la conexión:', mongoose.connection.readyState);
+        
+        // Cerrar conexión existente si hay una
+        if (mongoose.connection.readyState !== 0) {
+            console.log('Cerrando conexión existente...');
+            await mongoose.connection.close();
+        }
+
+        // Intentar conexión
+        await mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
+        
+        console.log('=== Conexión exitosa a MongoDB ===');
+        console.log('Base de datos:', mongoose.connection.db.databaseName);
+        console.log('Estado de la conexión:', mongoose.connection.readyState);
+        
+        // Verificar que podemos acceder a la base de datos
+        const collections = await mongoose.connection.db.listCollections().toArray();
+        console.log('Colecciones disponibles:', collections.map(c => c.name));
+        
+        await initializeCollections();
+    } catch (error) {
+        console.error('=== Error al conectar a MongoDB ===');
+        console.error('Error:', error.message);
+        console.error('Estado de la conexión:', mongoose.connection.readyState);
+        console.error('Reintentando en 5 segundos...');
+        setTimeout(connectToMongoDB, 5000);
+    }
+};
 
 // Manejar eventos de conexión
 mongoose.connection.on('connected', () => {
@@ -137,10 +171,14 @@ mongoose.connection.on('connected', () => {
 
 mongoose.connection.on('error', (err) => {
     console.error('Error en la conexión de MongoDB:', err);
+    console.log('Reintentando conexión en 5 segundos...');
+    setTimeout(connectToMongoDB, 5000);
 });
 
 mongoose.connection.on('disconnected', () => {
     console.log('MongoDB desconectado');
+    console.log('Intentando reconectar a MongoDB...');
+    connectToMongoDB();
 });
 
 // Inicialización de colecciones
