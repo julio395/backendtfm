@@ -89,6 +89,7 @@ const checkMongoConnection = async (req, res, next) => {
     try {
         console.log('=== Verificando conexión a MongoDB ===');
         console.log('Estado de conexión:', mongoose.connection.readyState);
+        console.log('URI:', MONGODB_URI);
         
         if (mongoose.connection.readyState !== 1) {
             console.log('Conexión no establecida, intentando reconectar...');
