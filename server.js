@@ -21,8 +21,8 @@ app.use((req, res, next) => {
     console.log('URL:', req.url);
     console.log('Headers:', req.headers);
     
-    // Permitir peticiones desde el frontend
-    res.header('Access-Control-Allow-Origin', 'https://projectfm.julio.coolify.hgccarlos.es');
+    // Permitir peticiones desde cualquier origen en desarrollo
+    res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     res.header('Access-Control-Allow-Credentials', 'true');
@@ -117,7 +117,7 @@ app.get('/api/health', async (req, res) => {
 mongoose.connect('mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    dbName: 'backend-tfm',
+    dbName: 'tfm',
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,
 })
@@ -207,7 +207,7 @@ const connectWithRetry = async () => {
         const options = {
             useNewUrlParser: true,
             useUnifiedTopology: true,
-            dbName: 'backend-tfm',
+            dbName: 'tfm',
             serverSelectionTimeoutMS: 30000,
             socketTimeoutMS: 45000,
             retryWrites: true,
