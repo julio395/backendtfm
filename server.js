@@ -1002,10 +1002,75 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Endpoint para insertar datos de prueba en Activos
+// Endpoint para insertar datos de prueba en Activos (GET y POST)
+app.get('/api/tfm/Activos/seed', checkMongoConnection, async (req, res) => {
+    try {
+        console.log('=== Insertando datos de prueba en Activos (GET) ===');
+        const db = mongoose.connection.db;
+        const activosCollection = db.collection('Activos');
+        
+        // Datos de ejemplo
+        const activosEjemplo = [
+            {
+                Nombre: 'Servidor Web',
+                Categoría: 'Infraestructura',
+                Proveedor: 'Microsoft',
+                Descripción: 'Servidor web principal de la empresa',
+                Criticidad: 'Alta',
+                Ubicación: 'Centro de Datos Principal',
+                Estado: 'Activo'
+            },
+            {
+                Nombre: 'Base de Datos',
+                Categoría: 'Datos',
+                Proveedor: 'Oracle',
+                Descripción: 'Base de datos principal',
+                Criticidad: 'Alta',
+                Ubicación: 'Centro de Datos Principal',
+                Estado: 'Activo'
+            },
+            {
+                Nombre: 'Firewall',
+                Categoría: 'Seguridad',
+                Proveedor: 'Cisco',
+                Descripción: 'Firewall perimetral',
+                Criticidad: 'Alta',
+                Ubicación: 'Centro de Datos Principal',
+                Estado: 'Activo'
+            }
+        ];
+        
+        // Verificar si ya existen datos
+        const count = await activosCollection.countDocuments();
+        if (count > 0) {
+            console.log(`Ya existen ${count} documentos en la colección Activos`);
+            return res.json({ 
+                message: 'La colección ya contiene datos',
+                count: count
+            });
+        }
+        
+        // Insertar datos de ejemplo
+        const result = await activosCollection.insertMany(activosEjemplo);
+        console.log(`${result.insertedCount} documentos insertados`);
+        
+        res.json({
+            message: 'Datos de prueba insertados correctamente',
+            count: result.insertedCount
+        });
+    } catch (error) {
+        console.error('Error al insertar datos de prueba:', error);
+        res.status(500).json({
+            error: 'Error al insertar datos de prueba',
+            details: error.message
+        });
+    }
+});
+
+// Mantener también la ruta POST para compatibilidad
 app.post('/api/tfm/Activos/seed', checkMongoConnection, async (req, res) => {
     try {
-        console.log('=== Insertando datos de prueba en Activos ===');
+        console.log('=== Insertando datos de prueba en Activos (POST) ===');
         const db = mongoose.connection.db;
         const activosCollection = db.collection('Activos');
         
