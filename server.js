@@ -243,21 +243,39 @@ let auditoriasCollection;
 // Función para inicializar colecciones
 const initializeCollections = async () => {
     try {
+        console.log('=== Inicializando colecciones ===');
         const db = mongoose.connection.db;
+        
+        // Lista de colecciones requeridas
+        const requiredCollections = ['Activos', 'Amenazas', 'Vulnerabilidades', 'Salvaguardas', 'Relaciones'];
+        
+        // Obtener colecciones existentes
         const existingCollections = await db.listCollections().toArray();
-        const existingCollectionNames = existingCollections.map(col => col.name);
-
-        for (const collectionName of collections) {
+        const existingCollectionNames = existingCollections.map(c => c.name);
+        console.log('Colecciones existentes:', existingCollectionNames);
+        
+        // Crear colecciones faltantes
+        for (const collectionName of requiredCollections) {
             if (!existingCollectionNames.includes(collectionName)) {
-                console.log(`Creando colección: ${collectionName}`);
+                console.log(`Creando colección ${collectionName}...`);
                 await db.createCollection(collectionName);
+                console.log(`Colección ${collectionName} creada`);
             }
         }
         
-        // Inicializar referencias a colecciones
-        auditoriasCollection = db.collection('Auditorias');
+        // Verificar colección Activos
+        const activosCollection = db.collection('Activos');
+        const activosCount = await activosCollection.countDocuments();
+        console.log(`Número de documentos en Activos: ${activosCount}`);
         
-        console.log('Todas las colecciones inicializadas correctamente');
+        if (activosCount === 0) {
+            console.log('La colección Activos está vacía');
+        } else {
+            const sampleDoc = await activosCollection.findOne();
+            console.log('Ejemplo de documento en Activos:', sampleDoc);
+        }
+        
+        console.log('=== Inicialización de colecciones completada ===');
     } catch (error) {
         console.error('Error al inicializar colecciones:', error);
         throw error;
@@ -982,6 +1000,71 @@ app.use((err, req, res, next) => {
         details: err.message,
         path: req.url
     });
+});
+
+// Endpoint para insertar datos de prueba en Activos
+app.post('/api/tfm/Activos/seed', checkMongoConnection, async (req, res) => {
+    try {
+        console.log('=== Insertando datos de prueba en Activos ===');
+        const db = mongoose.connection.db;
+        const activosCollection = db.collection('Activos');
+        
+        // Datos de ejemplo
+        const activosEjemplo = [
+            {
+                Nombre: 'Servidor Web',
+                Categoría: 'Infraestructura',
+                Proveedor: 'Microsoft',
+                Descripción: 'Servidor web principal de la empresa',
+                Criticidad: 'Alta',
+                Ubicación: 'Centro de Datos Principal',
+                Estado: 'Activo'
+            },
+            {
+                Nombre: 'Base de Datos',
+                Categoría: 'Datos',
+                Proveedor: 'Oracle',
+                Descripción: 'Base de datos principal',
+                Criticidad: 'Alta',
+                Ubicación: 'Centro de Datos Principal',
+                Estado: 'Activo'
+            },
+            {
+                Nombre: 'Firewall',
+                Categoría: 'Seguridad',
+                Proveedor: 'Cisco',
+                Descripción: 'Firewall perimetral',
+                Criticidad: 'Alta',
+                Ubicación: 'Centro de Datos Principal',
+                Estado: 'Activo'
+            }
+        ];
+        
+        // Verificar si ya existen datos
+        const count = await activosCollection.countDocuments();
+        if (count > 0) {
+            console.log(`Ya existen ${count} documentos en la colección Activos`);
+            return res.json({ 
+                message: 'La colección ya contiene datos',
+                count: count
+            });
+        }
+        
+        // Insertar datos de ejemplo
+        const result = await activosCollection.insertMany(activosEjemplo);
+        console.log(`${result.insertedCount} documentos insertados`);
+        
+        res.json({
+            message: 'Datos de prueba insertados correctamente',
+            count: result.insertedCount
+        });
+    } catch (error) {
+        console.error('Error al insertar datos de prueba:', error);
+        res.status(500).json({
+            error: 'Error al insertar datos de prueba',
+            details: error.message
+        });
+    }
 });
 
 // Iniciar el servidor
