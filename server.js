@@ -41,31 +41,41 @@ app.get('/api/mongodb-status', async (req, res) => {
         
         if (mongoose.connection.readyState !== 1) {
             console.log('Intentando reconectar a MongoDB...');
-            try {
-                await connectToMongoDB();
-            } catch (error) {
-                console.error('Error al intentar reconectar:', error);
-                return res.status(503).json({
-                    status: 'error',
-                    message: error.message,
-                    connectionState: mongoose.connection.readyState,
-                    details: 'No se pudo establecer conexión con MongoDB'
-                });
+            const connected = await connectToMongoDB();
+            if (!connected) {
+                throw new Error('No se pudo establecer la conexión con MongoDB');
             }
         }
 
         const db = mongoose.connection.db;
+        if (!db) {
+            throw new Error('No se pudo acceder a la base de datos');
+        }
+
         console.log('Base de datos:', db.databaseName);
         
-        const collections = await db.listCollections().toArray();
-        console.log('Colecciones disponibles:', collections.map(c => c.name));
-        
-        res.json({
-            status: 'connected',
-            database: db.databaseName,
-            collections: collections.map(c => c.name),
-            connectionState: mongoose.connection.readyState
-        });
+        try {
+            const collections = await db.listCollections().toArray();
+            console.log('Colecciones disponibles:', collections.map(c => c.name));
+            
+            // Verificar específicamente la colección Activos
+            const activosCollection = collections.find(c => c.name === 'Activos');
+            if (!activosCollection) {
+                console.log('La colección Activos no existe, creándola...');
+                await db.createCollection('Activos');
+                console.log('Colección Activos creada exitosamente');
+            }
+            
+            res.json({
+                status: 'connected',
+                database: db.databaseName,
+                collections: collections.map(c => c.name),
+                connectionState: mongoose.connection.readyState
+            });
+        } catch (error) {
+            console.error('Error al listar colecciones:', error);
+            throw new Error(`Error al acceder a las colecciones: ${error.message}`);
+        }
     } catch (error) {
         console.error('Error al verificar estado de MongoDB:', error);
         res.status(500).json({
@@ -88,7 +98,10 @@ const checkMongoConnection = async (req, res, next) => {
     try {
         if (mongoose.connection.readyState !== 1) {
             console.log('Conexión no establecida, intentando reconectar...');
-            await connectToMongoDB();
+            const connected = await connectToMongoDB();
+            if (!connected) {
+                throw new Error('No se pudo establecer la conexión con MongoDB');
+            }
         }
         next();
     } catch (error) {
@@ -129,11 +142,10 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://5.135.131.59:6590/tfm?directConnection=true';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    dbName: 'tfm',
     serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000,
     connectTimeoutMS: 30000,
@@ -143,19 +155,13 @@ const MONGODB_OPTIONS = {
     minPoolSize: 5,
     heartbeatFrequencyMS: 10000,
     keepAlive: true,
-    keepAliveInitialDelay: 300000,
-    auth: {
-        username: 'BBDD-mongo',
-        password: 'ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH'
-    }
+    keepAliveInitialDelay: 300000
 };
 
 // Función para conectar a MongoDB
 const connectToMongoDB = async () => {
     try {
         console.log('=== Intentando conectar a MongoDB ===');
-        console.log('URI:', MONGODB_URI);
-        console.log('Opciones:', JSON.stringify(MONGODB_OPTIONS, null, 2));
         console.log('Estado actual de la conexión:', mongoose.connection.readyState);
         
         // Cerrar conexión existente si hay una
@@ -164,43 +170,73 @@ const connectToMongoDB = async () => {
             await mongoose.connection.close();
         }
 
+        // Configurar eventos de conexión
+        mongoose.connection.on('error', (err) => {
+            console.error('Error de conexión MongoDB:', err);
+        });
+
+        mongoose.connection.on('disconnected', () => {
+            console.log('MongoDB desconectado');
+        });
+
+        mongoose.connection.on('connected', () => {
+            console.log('MongoDB conectado');
+        });
+
         // Intentar conexión
         console.log('Iniciando conexión a MongoDB...');
-        await mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
+        await mongoose.connect(MONGODB_URI, {
+            ...MONGODB_OPTIONS,
+            serverSelectionTimeoutMS: 10000, // Aumentar el tiempo de espera
+            socketTimeoutMS: 45000,
+            connectTimeoutMS: 10000,
+            family: 4
+        });
         
+        // Verificar que la conexión se estableció correctamente
+        if (mongoose.connection.readyState !== 1) {
+            throw new Error('La conexión no se estableció correctamente');
+        }
+
         console.log('=== Conexión exitosa a MongoDB ===');
         console.log('Base de datos:', mongoose.connection.db.databaseName);
         console.log('Estado de la conexión:', mongoose.connection.readyState);
         
         // Verificar que podemos acceder a la base de datos
-        const collections = await mongoose.connection.db.listCollections().toArray();
-        console.log('Colecciones disponibles:', collections.map(c => c.name));
+        const db = mongoose.connection.db;
+        if (!db) {
+            throw new Error('No se pudo acceder a la base de datos');
+        }
+
+        try {
+            const collections = await db.listCollections().toArray();
+            console.log('Colecciones disponibles:', collections.map(c => c.name));
+
+            // Verificar específicamente la colección Activos
+            const activosCollection = collections.find(c => c.name === 'Activos');
+            if (!activosCollection) {
+                console.log('La colección Activos no existe, creándola...');
+                await db.createCollection('Activos');
+                console.log('Colección Activos creada exitosamente');
+            }
+        } catch (error) {
+            console.error('Error al listar colecciones:', error);
+            throw new Error(`Error al acceder a las colecciones: ${error.message}`);
+        }
+
+        return true;
     } catch (error) {
         console.error('=== Error al conectar a MongoDB ===');
         console.error('Error:', error.message);
         console.error('Stack:', error.stack);
         console.error('Estado de la conexión:', mongoose.connection.readyState);
-        throw error;
+        
+        // Esperar 5 segundos antes de reintentar
+        console.log('Reintentando conexión en 5 segundos...');
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        return connectToMongoDB();
     }
 };
-
-// Manejar eventos de conexión
-mongoose.connection.on('connected', () => {
-    console.log('MongoDB conectado');
-});
-
-mongoose.connection.on('error', (err) => {
-    console.error('Error en la conexión de MongoDB:', err);
-    console.error('Stack:', err.stack);
-    console.log('Reintentando conexión en 5 segundos...');
-    setTimeout(connectToMongoDB, 5000);
-});
-
-mongoose.connection.on('disconnected', () => {
-    console.log('MongoDB desconectado');
-    console.log('Intentando reconectar a MongoDB...');
-    connectToMongoDB();
-});
 
 // Inicialización de colecciones
 const collections = [
