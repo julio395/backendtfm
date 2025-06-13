@@ -8,7 +8,7 @@ const app = express();
 
 // Configuración de CORS
 const corsOptions = {
-    origin: 'https://projectfm.julio.coolify.hgccarlos.es',
+    origin: ['https://projectfm.julio.coolify.hgccarlos.es', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
     credentials: true,
@@ -17,9 +17,9 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Middleware para logging de todas las solicitudes
+// Middleware para logging de peticiones
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    console.log(`=== Nueva petición ${req.method} a ${req.url} ===`);
     console.log('Headers:', req.headers);
     next();
 });
@@ -29,8 +29,8 @@ app.use(express.json());
 
 // Ruta de prueba
 app.get('/api/test', (req, res) => {
-    console.log('Test endpoint hit');
-    res.json({ message: 'Backend is working!' });
+    console.log('Recibida petición de prueba');
+    res.json({ message: 'Servidor funcionando correctamente' });
 });
 
 // Ruta para verificar la conexión a MongoDB
@@ -755,10 +755,15 @@ app.post('/api/auditoria/borrador', async (req, res) => {
 });
 
 // Endpoint para obtener todos los activos sin paginación
-app.get('/api/tfm/Activos/all', checkMongoConnection, async (req, res) => {
+app.get('/api/tfm/Activos/all', async (req, res) => {
     try {
         console.log('=== Iniciando petición de activos ===');
         console.log('Estado de conexión MongoDB:', mongoose.connection.readyState);
+        
+        if (mongoose.connection.readyState !== 1) {
+            console.log('Conexión no establecida, intentando reconectar...');
+            await connectToMongoDB();
+        }
         
         const db = mongoose.connection.db;
         console.log('Base de datos:', db.databaseName);
