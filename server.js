@@ -6,38 +6,22 @@ require('dotenv').config();
 
 const app = express();
 
+// Configuración de CORS
+const corsOptions = {
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+    credentials: true
+};
+
+app.use(cors(corsOptions));
+
 // Middleware para logging de todas las solicitudes
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
     console.log('Headers:', req.headers);
     next();
 });
-
-// Configuración de CORS y manejo de errores
-app.use((req, res, next) => {
-    console.log('=== Nueva petición recibida ===');
-    console.log('Origen:', req.headers.origin);
-    console.log('Método:', req.method);
-    console.log('URL:', req.url);
-    console.log('Headers:', req.headers);
-    
-    // Permitir peticiones desde cualquier origen en desarrollo
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    
-    // Manejar preflight requests
-    if (req.method === 'OPTIONS') {
-        console.log('Manejando preflight request');
-        return res.status(200).end();
-    }
-    
-    next();
-});
-
-// Middleware para parsear JSON
-app.use(express.json());
 
 // Ruta de prueba
 app.get('/api/test', (req, res) => {
@@ -114,7 +98,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true';
+const MONGODB_URI = 'mongodb://5.135.131.59:6590/tfm?directConnection=true';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -128,7 +112,11 @@ const MONGODB_OPTIONS = {
     minPoolSize: 5,
     heartbeatFrequencyMS: 10000,
     keepAlive: true,
-    keepAliveInitialDelay: 300000
+    keepAliveInitialDelay: 300000,
+    auth: {
+        username: 'BBDD-mongo',
+        password: 'ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH'
+    }
 };
 
 // Función para conectar a MongoDB
