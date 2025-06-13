@@ -63,6 +63,8 @@ const checkMongoConnection = (req, res, next) => {
     
     if (mongoose.connection.readyState !== 1) {
         console.error('No hay conexión con MongoDB');
+        // Intentar reconectar
+        connectToMongoDB();
         return res.status(503).json({
             error: 'Servicio no disponible',
             details: 'No hay conexión con la base de datos',
@@ -127,6 +129,7 @@ const MONGODB_OPTIONS = {
 const connectToMongoDB = async () => {
     try {
         console.log('=== Intentando conectar a MongoDB ===');
+        console.log('URI:', MONGODB_URI);
         console.log('Estado actual de la conexión:', mongoose.connection.readyState);
         
         // Cerrar conexión existente si hay una
@@ -152,7 +155,10 @@ const connectToMongoDB = async () => {
         console.error('Error:', error.message);
         console.error('Estado de la conexión:', mongoose.connection.readyState);
         console.error('Reintentando en 5 segundos...');
-        setTimeout(connectToMongoDB, 5000);
+        
+        // Esperar 5 segundos antes de reintentar
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        return connectToMongoDB();
     }
 };
 
@@ -934,8 +940,7 @@ app.use((err, req, res, next) => {
 // Iniciar el servidor
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor corriendo en puerto ${PORT}`);
-    console.log('Configuración del servidor:');
-    console.log('- Puerto:', PORT);
-    console.log('- Entorno:', process.env.NODE_ENV || 'development');
+    console.log(`Servidor escuchando en el puerto ${PORT}`);
+    console.log('Intentando conectar a MongoDB...');
+    connectToMongoDB();
 }); 
