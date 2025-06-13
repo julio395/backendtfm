@@ -38,7 +38,6 @@ app.get('/api/mongodb-status', async (req, res) => {
     try {
         console.log('=== Verificando estado de MongoDB ===');
         console.log('Estado de conexión:', mongoose.connection.readyState);
-        console.log('URI:', MONGODB_URI);
         
         if (mongoose.connection.readyState !== 1) {
             console.log('Intentando reconectar a MongoDB...');
