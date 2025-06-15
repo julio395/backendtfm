@@ -129,14 +129,20 @@ app.get('/api/health', async (req, res) => {
             try {
                 await connectToMongoDB();
             } catch (error) {
-                console.error('Error al reconectar a MongoDB:', error);
+                console.error('Error al reconectar a MongoDB:', {
+                    message: error.message,
+                    name: error.name,
+                    code: error.code,
+                    stack: error.stack
+                });
                 return res.status(500).json({
                     status: 'error',
                     error: 'Error de conexión con la base de datos',
                     mongodb: {
                         status: 'disconnected',
                         error: error.message,
-                        code: error.code
+                        code: error.code,
+                        readyState: mongoose.connection.readyState
                     }
                 });
             }
@@ -181,7 +187,8 @@ app.get('/api/health', async (req, res) => {
                 mongodb: {
                     status: 'connected',
                     error: error.message,
-                    code: error.code
+                    code: error.code,
+                    readyState: mongoose.connection.readyState
                 }
             });
         }
@@ -201,13 +208,13 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&connectTimeoutMS=60000&socketTimeoutMS=60000';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
+    serverSelectionTimeoutMS: 60000,
+    socketTimeoutMS: 60000,
+    connectTimeoutMS: 60000,
     retryWrites: true,
     retryReads: true,
     maxPoolSize: 10,
@@ -220,7 +227,9 @@ const MONGODB_OPTIONS = {
     ssl: false,
     tls: false,
     tlsAllowInvalidCertificates: true,
-    tlsAllowInvalidHostnames: true
+    tlsAllowInvalidHostnames: true,
+    maxIdleTimeMS: 60000,
+    waitQueueTimeoutMS: 60000
 };
 
 // Función para conectar a MongoDB
@@ -237,7 +246,12 @@ const connectToMongoDB = async () => {
 
         // Configurar eventos de conexión
         mongoose.connection.on('error', (err) => {
-            console.error('Error de conexión MongoDB:', err);
+            console.error('Error de conexión MongoDB:', {
+                message: err.message,
+                name: err.name,
+                code: err.code,
+                stack: err.stack
+            });
         });
 
         mongoose.connection.on('disconnected', () => {
@@ -248,11 +262,44 @@ const connectToMongoDB = async () => {
             console.log('MongoDB conectado');
         });
 
+        mongoose.connection.on('connecting', () => {
+            console.log('Conectando a MongoDB...');
+        });
+
+        mongoose.connection.on('reconnected', () => {
+            console.log('MongoDB reconectado');
+        });
+
         // Intentar conexión
         console.log('Iniciando conexión a MongoDB...');
         console.log('Opciones de conexión:', JSON.stringify(MONGODB_OPTIONS, null, 2));
         
-        await mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
+        // Intentar conexión con retry
+        let retries = 3;
+        let lastError = null;
+        
+        while (retries > 0) {
+            try {
+                await mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
+                break;
+            } catch (error) {
+                lastError = error;
+                console.error(`Intento de conexión fallido (${4-retries}/3):`, {
+                    message: error.message,
+                    name: error.name,
+                    code: error.code
+                });
+                retries--;
+                if (retries > 0) {
+                    console.log(`Esperando 5 segundos antes de reintentar...`);
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                }
+            }
+        }
+
+        if (retries === 0) {
+            throw lastError;
+        }
         
         // Verificar que la conexión se estableció correctamente
         if (mongoose.connection.readyState !== 1) {
