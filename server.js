@@ -227,46 +227,17 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&connectTimeoutMS=60000&socketTimeoutMS=60000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 60000,
-    socketTimeoutMS: 60000,
-    connectTimeoutMS: 60000,
-    retryWrites: true,
-    retryReads: true,
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    heartbeatFrequencyMS: 10000,
-    keepAlive: true,
-    keepAliveInitialDelay: 300000,
+    serverSelectionTimeoutMS: 30000,
+    socketTimeoutMS: 30000,
+    connectTimeoutMS: 30000,
     family: 4,
     directConnection: true,
-    ssl: false,
-    tls: false,
-    tlsAllowInvalidCertificates: true,
-    tlsAllowInvalidHostnames: true,
-    maxIdleTimeMS: 60000,
-    waitQueueTimeoutMS: 60000,
-    autoIndex: true,
-    autoCreate: true,
-    connectTimeoutMS: 60000,
-    socketTimeoutMS: 60000,
-    serverSelectionTimeoutMS: 60000,
-    heartbeatFrequencyMS: 10000,
-    retryWrites: true,
-    retryReads: true,
-    maxPoolSize: 10,
-    minPoolSize: 5,
-    maxIdleTimeMS: 60000,
-    waitQueueTimeoutMS: 60000,
-    w: 'majority',
-    wtimeoutMS: 60000,
-    readPreference: 'primary',
-    readPreferenceTags: [],
-    readConcern: { level: 'local' },
-    writeConcern: { w: 'majority', wtimeout: 60000 }
+    authSource: 'admin',
+    authMechanism: 'SCRAM-SHA-1'
 };
 
 // Función para verificar la conectividad básica
@@ -288,7 +259,7 @@ const checkBasicConnectivity = async () => {
         
         return new Promise((resolve, reject) => {
             const socket = new net.Socket();
-            const timeout = 10000; // Aumentado a 10 segundos
+            const timeout = 5000;
             
             socket.setTimeout(timeout);
             
@@ -378,7 +349,7 @@ const connectToMongoDB = async () => {
                 // Intentar conexión con timeout
                 const connectionPromise = mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
                 const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Timeout al conectar con MongoDB')), 55000);
+                    setTimeout(() => reject(new Error('Timeout al conectar con MongoDB')), 25000);
                 });
 
                 await Promise.race([connectionPromise, timeoutPromise]);
