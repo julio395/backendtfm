@@ -183,13 +183,13 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5&family=4';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=120000&connectTimeoutMS=120000&socketTimeoutMS=120000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5&family=4';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 30000,
-    connectTimeoutMS: 30000,
+    serverSelectionTimeoutMS: 120000,
+    socketTimeoutMS: 120000,
+    connectTimeoutMS: 120000,
     family: 4,
     directConnection: true,
     authSource: 'admin',
@@ -208,11 +208,11 @@ const MONGODB_OPTIONS = {
     autoIndex: true,
     autoCreate: true,
     w: 'majority',
-    wtimeoutMS: 30000,
+    wtimeoutMS: 120000,
     readPreference: 'primary',
     readPreferenceTags: [],
     readConcern: { level: 'local' },
-    writeConcern: { w: 'majority', wtimeout: 30000 }
+    writeConcern: { w: 'majority', wtimeout: 120000 }
 };
 
 // Función para verificar la conectividad básica
@@ -236,7 +236,7 @@ const checkBasicConnectivity = async () => {
         console.log('2. Verificando conexión TCP...');
         return new Promise((resolve, reject) => {
             const socket = new net.Socket();
-            const timeout = 15000; // Aumentado a 15 segundos
+            const timeout = 30000; // Aumentado a 30 segundos
             
             socket.setTimeout(timeout);
             
@@ -1304,6 +1304,13 @@ app.post('/api/tfm/Activos/seed', checkMongoConnection, async (req, res) => {
             details: error.message
         });
     }
+});
+
+// Configuración de timeout para todas las peticiones
+app.use((req, res, next) => {
+    req.setTimeout(60000); // 60 segundos
+    res.setTimeout(60000); // 60 segundos
+    next();
 });
 
 // Iniciar el servidor
