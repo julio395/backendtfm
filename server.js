@@ -117,110 +117,66 @@ const checkMongoConnection = async (req, res, next) => {
     }
 };
 
-// Endpoint de health check mejorado
+// Endpoint de health check
 app.get('/api/health', async (req, res) => {
+    console.log('=== Health Check Iniciado ===');
     try {
-        console.log('=== Health Check Iniciado ===');
-        console.log('Estado actual de MongoDB:', mongoose.connection.readyState);
+        console.log('Verificando estado de MongoDB...');
+        const isConnected = await connectToMongoDB();
+        console.log('Estado de conexión MongoDB:', isConnected);
         
-        // Verificar si la conexión a MongoDB está establecida
-        if (mongoose.connection.readyState !== 1) {
-            console.log('MongoDB no está conectado, intentando reconectar...');
-            try {
-                await connectToMongoDB();
-            } catch (error) {
-                console.error('Error al reconectar a MongoDB:', {
-                    message: error.message,
-                    name: error.name,
-                    code: error.code,
-                    stack: error.stack
-                });
-                return res.status(500).json({
-                    status: 'error',
-                    error: 'Error de conexión con la base de datos',
-                    mongodb: {
-                        status: 'disconnected',
-                        error: error.message,
-                        code: error.code,
-                        readyState: mongoose.connection.readyState,
-                        details: {
-                            message: error.message,
-                            name: error.name,
-                            code: error.code
-                        }
-                    }
-                });
-            }
-        }
-
-        // Verificar que la conexión está activa
-        if (mongoose.connection.readyState !== 1) {
+        if (!isConnected) {
+            console.log('MongoDB no está conectado');
             return res.status(500).json({
                 status: 'error',
-                error: 'No se pudo establecer la conexión con MongoDB',
+                error: 'Error de conexión con la base de datos',
                 mongodb: {
-                    status: 'disconnected',
-                    readyState: mongoose.connection.readyState,
-                    details: {
-                        message: 'La conexión no se estableció correctamente',
-                        readyState: mongoose.connection.readyState
-                    }
+                    connected: false,
+                    error: 'No se pudo establecer conexión'
                 }
             });
         }
 
-        // Verificar que podemos acceder a la base de datos
+        console.log('Verificando acceso a la base de datos...');
         const db = mongoose.connection.db;
         if (!db) {
-            throw new Error('No se pudo acceder a la base de datos');
+            console.log('No se pudo acceder a la base de datos');
+            return res.status(500).json({
+                status: 'error',
+                error: 'Error de conexión con la base de datos',
+                mongodb: {
+                    connected: false,
+                    error: 'No se pudo acceder a la base de datos'
+                }
+            });
         }
 
-        try {
-            const collections = await db.listCollections().toArray();
-            res.json({
-                status: 'ok',
-                timestamp: new Date().toISOString(),
-                mongodb: {
-                    status: 'connected',
-                    collections: collections.map(c => c.name),
-                    database: db.databaseName,
-                    readyState: mongoose.connection.readyState
-                },
-                memory: process.memoryUsage()
-            });
-        } catch (error) {
-            console.error('Error al listar colecciones:', error);
-            res.status(500).json({
-                status: 'error',
-                error: 'Error al acceder a las colecciones de la base de datos',
-                mongodb: {
-                    status: 'connected',
-                    error: error.message,
-                    code: error.code,
-                    readyState: mongoose.connection.readyState,
-                    details: {
-                        message: error.message,
-                        name: error.name,
-                        code: error.code
-                    }
-                }
-            });
-        }
+        console.log('Listando colecciones...');
+        const collections = await db.listCollections().toArray();
+        console.log('Colecciones encontradas:', collections.map(c => c.name));
+
+        console.log('=== Health Check Completado con Éxito ===');
+        res.json({
+            status: 'ok',
+            mongodb: {
+                connected: true,
+                collections: collections.map(c => c.name)
+            }
+        });
     } catch (error) {
-        console.error('Error en health check:', error);
+        console.error('Error en health check:', {
+            message: error.message,
+            name: error.name,
+            code: error.code,
+            stack: error.stack
+        });
         res.status(500).json({
             status: 'error',
-            error: error.message,
+            error: 'Error de conexión con la base de datos',
             mongodb: {
-                status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-                readyState: mongoose.connection.readyState,
+                connected: false,
                 error: error.message,
-                code: error.code,
-                details: {
-                    message: error.message,
-                    name: error.name,
-                    code: error.code
-                }
+                code: error.code
             }
         });
     }
@@ -262,51 +218,41 @@ const MONGODB_OPTIONS = {
 // Función para verificar la conectividad básica
 const checkBasicConnectivity = async () => {
     try {
-        console.log('Verificando conectividad básica con MongoDB...');
-        const net = require('net');
-        const dns = require('dns');
-        
-        // Primero intentamos resolver el nombre de host
-        try {
-            console.log('Resolviendo nombre de host...');
-            const addresses = await dns.promises.lookup('5.135.131.59');
-            console.log('Dirección IP resuelta:', addresses);
-        } catch (error) {
-            console.error('Error al resolver el nombre de host:', error);
-            throw new Error('No se pudo resolver el nombre de host');
-        }
-        
-        return new Promise((resolve, reject) => {
-            const socket = new net.Socket();
-            const timeout = 5000;
-            
-            socket.setTimeout(timeout);
-            
-            socket.on('connect', () => {
-                console.log('Conexión TCP establecida con MongoDB');
-                socket.destroy();
-                resolve(true);
-            });
-            
-            socket.on('timeout', () => {
-                console.log('Timeout al intentar conexión TCP con MongoDB');
-                socket.destroy();
-                reject(new Error('Timeout al intentar conexión TCP'));
-            });
-            
-            socket.on('error', (err) => {
-                console.log('Error al intentar conexión TCP con MongoDB:', err.message);
-                socket.destroy();
-                reject(err);
-            });
-            
-            console.log('Intentando conexión TCP con MongoDB...');
-            socket.connect(6590, '5.135.131.59');
-        });
+        console.log('Resolviendo nombre de host...');
+        const addresses = await dns.promises.lookup('5.135.131.59');
+        console.log('Dirección IP resuelta:', addresses);
     } catch (error) {
-        console.error('Error al verificar conectividad:', error);
-        throw error;
+        console.error('Error al resolver el nombre de host:', error);
+        throw new Error('No se pudo resolver el nombre de host');
     }
+    
+    return new Promise((resolve, reject) => {
+        const socket = new net.Socket();
+        const timeout = 5000;
+        
+        socket.setTimeout(timeout);
+        
+        socket.on('connect', () => {
+            console.log('Conexión TCP establecida con MongoDB');
+            socket.destroy();
+            resolve(true);
+        });
+        
+        socket.on('timeout', () => {
+            console.log('Timeout al intentar conexión TCP con MongoDB');
+            socket.destroy();
+            reject(new Error('Timeout al intentar conexión TCP'));
+        });
+        
+        socket.on('error', (err) => {
+            console.log('Error al intentar conexión TCP con MongoDB:', err.message);
+            socket.destroy();
+            reject(err);
+        });
+        
+        console.log('Intentando conexión TCP con MongoDB...');
+        socket.connect(6590, '5.135.131.59');
+    });
 };
 
 // Función para conectar a MongoDB
@@ -365,6 +311,7 @@ const connectToMongoDB = async () => {
         
         while (retries > 0) {
             try {
+                console.log(`Intento de conexión ${4-retries}/3...`);
                 // Intentar conexión con timeout
                 const connectionPromise = mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
                 const timeoutPromise = new Promise((_, reject) => {
