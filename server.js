@@ -120,6 +120,9 @@ const checkMongoConnection = async (req, res, next) => {
 // Endpoint de health check mejorado
 app.get('/api/health', async (req, res) => {
     try {
+        console.log('=== Health Check Iniciado ===');
+        console.log('Estado actual de MongoDB:', mongoose.connection.readyState);
+        
         // Verificar si la conexión a MongoDB está establecida
         if (mongoose.connection.readyState !== 1) {
             console.log('MongoDB no está conectado, intentando reconectar...');
@@ -132,7 +135,8 @@ app.get('/api/health', async (req, res) => {
                     error: 'Error de conexión con la base de datos',
                     mongodb: {
                         status: 'disconnected',
-                        error: error.message
+                        error: error.message,
+                        code: error.code
                     }
                 });
             }
@@ -144,7 +148,8 @@ app.get('/api/health', async (req, res) => {
                 status: 'error',
                 error: 'No se pudo establecer la conexión con MongoDB',
                 mongodb: {
-                    status: 'disconnected'
+                    status: 'disconnected',
+                    readyState: mongoose.connection.readyState
                 }
             });
         }
@@ -163,7 +168,8 @@ app.get('/api/health', async (req, res) => {
                 mongodb: {
                     status: 'connected',
                     collections: collections.map(c => c.name),
-                    database: db.databaseName
+                    database: db.databaseName,
+                    readyState: mongoose.connection.readyState
                 },
                 memory: process.memoryUsage()
             });
@@ -174,7 +180,8 @@ app.get('/api/health', async (req, res) => {
                 error: 'Error al acceder a las colecciones de la base de datos',
                 mongodb: {
                     status: 'connected',
-                    error: error.message
+                    error: error.message,
+                    code: error.code
                 }
             });
         }
@@ -184,14 +191,17 @@ app.get('/api/health', async (req, res) => {
             status: 'error',
             error: error.message,
             mongodb: {
-                status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+                status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+                readyState: mongoose.connection.readyState,
+                error: error.message,
+                code: error.code
             }
         });
     }
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -206,13 +216,18 @@ const MONGODB_OPTIONS = {
     keepAlive: true,
     keepAliveInitialDelay: 300000,
     family: 4,
-    directConnection: true
+    directConnection: true,
+    ssl: false,
+    tls: false,
+    tlsAllowInvalidCertificates: true,
+    tlsAllowInvalidHostnames: true
 };
 
 // Función para conectar a MongoDB
 const connectToMongoDB = async () => {
     try {
         console.log('=== Intentando conectar a MongoDB ===');
+        console.log('URI de MongoDB:', MONGODB_URI.replace(/:[^:]*@/, ':****@')); // Ocultar contraseña en logs
         
         // Si ya hay una conexión activa, la cerramos
         if (mongoose.connection.readyState !== 0) {
@@ -235,6 +250,8 @@ const connectToMongoDB = async () => {
 
         // Intentar conexión
         console.log('Iniciando conexión a MongoDB...');
+        console.log('Opciones de conexión:', JSON.stringify(MONGODB_OPTIONS, null, 2));
+        
         await mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
         
         // Verificar que la conexión se estableció correctamente
@@ -260,7 +277,12 @@ const connectToMongoDB = async () => {
         console.log('=== Conexión exitosa a MongoDB ===');
         return true;
     } catch (error) {
-        console.error('Error al conectar a MongoDB:', error);
+        console.error('Error detallado al conectar a MongoDB:', {
+            message: error.message,
+            name: error.name,
+            code: error.code,
+            stack: error.stack
+        });
         throw error;
     }
 };
