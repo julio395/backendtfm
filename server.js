@@ -125,13 +125,42 @@ app.get('/api/health', async (req, res) => {
         const isConnected = await connectToMongoDB();
         console.log('Estado de conexión MongoDB:', isConnected);
         
-        // Incluso si MongoDB no está conectado, devolvemos una respuesta
+        if (!isConnected) {
+            console.log('MongoDB no está conectado');
+            return res.status(500).json({
+                status: 'error',
+                error: 'Error de conexión con la base de datos',
+                mongodb: {
+                    connected: false,
+                    error: 'No se pudo establecer conexión'
+                }
+            });
+        }
+
+        console.log('Verificando acceso a la base de datos...');
+        const db = mongoose.connection.db;
+        if (!db) {
+            console.log('No se pudo acceder a la base de datos');
+            return res.status(500).json({
+                status: 'error',
+                error: 'Error de conexión con la base de datos',
+                mongodb: {
+                    connected: false,
+                    error: 'No se pudo acceder a la base de datos'
+                }
+            });
+        }
+
+        console.log('Listando colecciones...');
+        const collections = await db.listCollections().toArray();
+        console.log('Colecciones encontradas:', collections.map(c => c.name));
+
+        console.log('=== Health Check Completado con Éxito ===');
         res.json({
-            status: isConnected ? 'ok' : 'warning',
-            message: isConnected ? 'Servidor funcionando correctamente' : 'Servidor funcionando pero con problemas de conexión a la base de datos',
+            status: 'ok',
             mongodb: {
-                connected: isConnected,
-                error: isConnected ? null : 'No se pudo establecer conexión con la base de datos'
+                connected: true,
+                collections: collections.map(c => c.name)
             }
         });
     } catch (error) {
@@ -141,10 +170,9 @@ app.get('/api/health', async (req, res) => {
             code: error.code,
             stack: error.stack
         });
-        // Devolvemos una respuesta incluso en caso de error
-        res.json({
-            status: 'warning',
-            message: 'Servidor funcionando pero con problemas de conexión a la base de datos',
+        res.status(500).json({
+            status: 'error',
+            error: 'Error de conexión con la base de datos',
             mongodb: {
                 connected: false,
                 error: error.message,
@@ -155,13 +183,13 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=120000&connectTimeoutMS=120000&socketTimeoutMS=120000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5&family=4';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5&family=4';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 120000,
-    socketTimeoutMS: 120000,
-    connectTimeoutMS: 120000,
+    serverSelectionTimeoutMS: 30000,
+    socketTimeoutMS: 30000,
+    connectTimeoutMS: 30000,
     family: 4,
     directConnection: true,
     authSource: 'admin',
@@ -180,11 +208,11 @@ const MONGODB_OPTIONS = {
     autoIndex: true,
     autoCreate: true,
     w: 'majority',
-    wtimeoutMS: 120000,
+    wtimeoutMS: 30000,
     readPreference: 'primary',
     readPreferenceTags: [],
     readConcern: { level: 'local' },
-    writeConcern: { w: 'majority', wtimeout: 120000 }
+    writeConcern: { w: 'majority', wtimeout: 30000 }
 };
 
 // Función para verificar la conectividad básica
@@ -208,7 +236,7 @@ const checkBasicConnectivity = async () => {
         console.log('2. Verificando conexión TCP...');
         return new Promise((resolve, reject) => {
             const socket = new net.Socket();
-            const timeout = 30000; // Aumentado a 30 segundos
+            const timeout = 15000; // Aumentado a 15 segundos
             
             socket.setTimeout(timeout);
             
@@ -1276,13 +1304,6 @@ app.post('/api/tfm/Activos/seed', checkMongoConnection, async (req, res) => {
             details: error.message
         });
     }
-});
-
-// Configuración de timeout para todas las peticiones
-app.use((req, res, next) => {
-    req.setTimeout(60000); // 60 segundos
-    res.setTimeout(60000); // 60 segundos
-    next();
 });
 
 // Iniciar el servidor
