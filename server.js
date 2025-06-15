@@ -183,13 +183,13 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&connectTimeoutMS=60000&socketTimeoutMS=60000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5&family=4';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=120000&connectTimeoutMS=120000&socketTimeoutMS=120000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5&family=4';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 60000,
-    socketTimeoutMS: 60000,
-    connectTimeoutMS: 60000,
+    serverSelectionTimeoutMS: 120000,
+    socketTimeoutMS: 120000,
+    connectTimeoutMS: 120000,
     family: 4,
     directConnection: true,
     authSource: 'admin',
@@ -208,11 +208,11 @@ const MONGODB_OPTIONS = {
     autoIndex: true,
     autoCreate: true,
     w: 'majority',
-    wtimeoutMS: 60000,
+    wtimeoutMS: 120000,
     readPreference: 'primary',
     readPreferenceTags: [],
     readConcern: { level: 'local' },
-    writeConcern: { w: 'majority', wtimeout: 60000 }
+    writeConcern: { w: 'majority', wtimeout: 120000 }
 };
 
 // Función para verificar la conectividad básica
