@@ -117,7 +117,7 @@ const checkMongoConnection = async (req, res, next) => {
     }
 };
 
-// Endpoint de health check
+// Endpoint de health check mejorado
 app.get('/api/health', async (req, res) => {
     console.log('=== Health Check Iniciado ===');
     try {
@@ -127,7 +127,7 @@ app.get('/api/health', async (req, res) => {
         
         if (!isConnected) {
             console.log('MongoDB no está conectado');
-            return res.status(500).json({
+            return res.status(503).json({
                 status: 'error',
                 error: 'Error de conexión con la base de datos',
                 mongodb: {
@@ -141,7 +141,7 @@ app.get('/api/health', async (req, res) => {
         const db = mongoose.connection.db;
         if (!db) {
             console.log('No se pudo acceder a la base de datos');
-            return res.status(500).json({
+            return res.status(503).json({
                 status: 'error',
                 error: 'Error de conexión con la base de datos',
                 mongodb: {
@@ -170,7 +170,7 @@ app.get('/api/health', async (req, res) => {
             code: error.code,
             stack: error.stack
         });
-        res.status(500).json({
+        res.status(503).json({
             status: 'error',
             error: 'Error de conexión con la base de datos',
             mongodb: {
@@ -183,7 +183,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE9pEmCX7dDhX5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE9pEmCX7dDhX5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
