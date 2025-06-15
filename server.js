@@ -142,7 +142,12 @@ app.get('/api/health', async (req, res) => {
                         status: 'disconnected',
                         error: error.message,
                         code: error.code,
-                        readyState: mongoose.connection.readyState
+                        readyState: mongoose.connection.readyState,
+                        details: {
+                            message: error.message,
+                            name: error.name,
+                            code: error.code
+                        }
                     }
                 });
             }
@@ -155,7 +160,11 @@ app.get('/api/health', async (req, res) => {
                 error: 'No se pudo establecer la conexión con MongoDB',
                 mongodb: {
                     status: 'disconnected',
-                    readyState: mongoose.connection.readyState
+                    readyState: mongoose.connection.readyState,
+                    details: {
+                        message: 'La conexión no se estableció correctamente',
+                        readyState: mongoose.connection.readyState
+                    }
                 }
             });
         }
@@ -188,7 +197,12 @@ app.get('/api/health', async (req, res) => {
                     status: 'connected',
                     error: error.message,
                     code: error.code,
-                    readyState: mongoose.connection.readyState
+                    readyState: mongoose.connection.readyState,
+                    details: {
+                        message: error.message,
+                        name: error.name,
+                        code: error.code
+                    }
                 }
             });
         }
@@ -201,14 +215,19 @@ app.get('/api/health', async (req, res) => {
                 status: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
                 readyState: mongoose.connection.readyState,
                 error: error.message,
-                code: error.code
+                code: error.code,
+                details: {
+                    message: error.message,
+                    name: error.name,
+                    code: error.code
+                }
             }
         });
     }
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&connectTimeoutMS=60000&socketTimeoutMS=60000';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&connectTimeoutMS=60000&socketTimeoutMS=60000&retryWrites=true&retryReads=true';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -229,7 +248,9 @@ const MONGODB_OPTIONS = {
     tlsAllowInvalidCertificates: true,
     tlsAllowInvalidHostnames: true,
     maxIdleTimeMS: 60000,
-    waitQueueTimeoutMS: 60000
+    waitQueueTimeoutMS: 60000,
+    autoIndex: true,
+    autoCreate: true
 };
 
 // Función para conectar a MongoDB
@@ -280,8 +301,34 @@ const connectToMongoDB = async () => {
         
         while (retries > 0) {
             try {
-                await mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
-                break;
+                // Intentar conexión con timeout
+                const connectionPromise = mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Timeout al conectar con MongoDB')), 55000);
+                });
+
+                await Promise.race([connectionPromise, timeoutPromise]);
+                
+                // Verificar que la conexión se estableció correctamente
+                if (mongoose.connection.readyState !== 1) {
+                    throw new Error('La conexión no se estableció correctamente');
+                }
+
+                // Verificar que podemos acceder a la base de datos
+                const db = mongoose.connection.db;
+                if (!db) {
+                    throw new Error('No se pudo acceder a la base de datos');
+                }
+
+                // Verificar que podemos listar las colecciones
+                try {
+                    const collections = await db.listCollections().toArray();
+                    console.log('Colecciones disponibles:', collections.map(c => c.name));
+                    break;
+                } catch (error) {
+                    console.error('Error al listar colecciones:', error);
+                    throw new Error('No se pudo acceder a las colecciones de la base de datos');
+                }
             } catch (error) {
                 lastError = error;
                 console.error(`Intento de conexión fallido (${4-retries}/3):`, {
@@ -299,26 +346,6 @@ const connectToMongoDB = async () => {
 
         if (retries === 0) {
             throw lastError;
-        }
-        
-        // Verificar que la conexión se estableció correctamente
-        if (mongoose.connection.readyState !== 1) {
-            throw new Error('La conexión no se estableció correctamente');
-        }
-
-        // Verificar que podemos acceder a la base de datos
-        const db = mongoose.connection.db;
-        if (!db) {
-            throw new Error('No se pudo acceder a la base de datos');
-        }
-
-        // Verificar que podemos listar las colecciones
-        try {
-            const collections = await db.listCollections().toArray();
-            console.log('Colecciones disponibles:', collections.map(c => c.name));
-        } catch (error) {
-            console.error('Error al listar colecciones:', error);
-            throw new Error('No se pudo acceder a las colecciones de la base de datos');
         }
 
         console.log('=== Conexión exitosa a MongoDB ===');
