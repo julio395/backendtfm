@@ -14,12 +14,36 @@ const corsOptions = {
         'http://localhost:3000'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+    allowedHeaders: [
+        'Origin',
+        'X-Requested-With',
+        'Content-Type',
+        'Accept',
+        'Authorization',
+        'Cache-Control',
+        'Pragma',
+        'If-Match',
+        'If-None-Match',
+        'If-Modified-Since',
+        'If-Unmodified-Since'
+    ],
+    exposedHeaders: [
+        'ETag',
+        'Last-Modified',
+        'Cache-Control',
+        'Content-Type',
+        'Content-Length'
+    ],
     credentials: true,
-    optionsSuccessStatus: 200
+    optionsSuccessStatus: 200,
+    preflightContinue: false,
+    maxAge: 86400 // 24 horas
 };
 
 app.use(cors(corsOptions));
+
+// Middleware para manejar preflight requests
+app.options('*', cors(corsOptions));
 
 // Middleware para logging de peticiones
 app.use((req, res, next) => {
