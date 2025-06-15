@@ -183,7 +183,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5&family=4';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -236,7 +236,7 @@ const checkBasicConnectivity = async () => {
         console.log('2. Verificando conexión TCP...');
         return new Promise((resolve, reject) => {
             const socket = new net.Socket();
-            const timeout = 10000; // Aumentado a 10 segundos
+            const timeout = 15000; // Aumentado a 15 segundos
             
             socket.setTimeout(timeout);
             
@@ -267,7 +267,10 @@ const checkBasicConnectivity = async () => {
             socket.connect({
                 host: '5.135.131.59',
                 port: 6590,
-                timeout: timeout
+                timeout: timeout,
+                localAddress: undefined,
+                localPort: undefined,
+                family: 4
             });
         });
     } catch (error) {
@@ -340,7 +343,7 @@ const connectToMongoDB = async () => {
                 // Intentar conexión con timeout
                 const connectionPromise = mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
                 const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Timeout al conectar con MongoDB')), 25000);
+                    setTimeout(() => reject(new Error('Timeout al conectar con MongoDB')), 30000);
                 });
 
                 await Promise.race([connectionPromise, timeoutPromise]);
