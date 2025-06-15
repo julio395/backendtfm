@@ -195,16 +195,18 @@ const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10f
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000,
-    socketTimeoutMS: 10000,
-    connectTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 30000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 30000,
     retryWrites: true,
     retryReads: true,
     maxPoolSize: 10,
     minPoolSize: 5,
-    heartbeatFrequencyMS: 5000,
+    heartbeatFrequencyMS: 10000,
     keepAlive: true,
-    keepAliveInitialDelay: 300000
+    keepAliveInitialDelay: 300000,
+    family: 4,
+    directConnection: true
 };
 
 // Función para conectar a MongoDB
@@ -238,6 +240,21 @@ const connectToMongoDB = async () => {
         // Verificar que la conexión se estableció correctamente
         if (mongoose.connection.readyState !== 1) {
             throw new Error('La conexión no se estableció correctamente');
+        }
+
+        // Verificar que podemos acceder a la base de datos
+        const db = mongoose.connection.db;
+        if (!db) {
+            throw new Error('No se pudo acceder a la base de datos');
+        }
+
+        // Verificar que podemos listar las colecciones
+        try {
+            const collections = await db.listCollections().toArray();
+            console.log('Colecciones disponibles:', collections.map(c => c.name));
+        } catch (error) {
+            console.error('Error al listar colecciones:', error);
+            throw new Error('No se pudo acceder a las colecciones de la base de datos');
         }
 
         console.log('=== Conexión exitosa a MongoDB ===');
