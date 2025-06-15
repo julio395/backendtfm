@@ -227,7 +227,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=30000&connectTimeoutMS=30000&socketTimeoutMS=30000&retryWrites=true&retryReads=true';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -241,7 +241,14 @@ const MONGODB_OPTIONS = {
     ssl: false,
     tls: false,
     tlsAllowInvalidCertificates: true,
-    tlsAllowInvalidHostnames: true
+    tlsAllowInvalidHostnames: true,
+    retryWrites: true,
+    retryReads: true,
+    maxPoolSize: 10,
+    minPoolSize: 5,
+    heartbeatFrequencyMS: 10000,
+    keepAlive: true,
+    keepAliveInitialDelay: 300000
 };
 
 // Función para verificar la conectividad básica
