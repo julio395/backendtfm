@@ -227,7 +227,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&connectTimeoutMS=60000&socketTimeoutMS=60000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&connectTimeoutMS=60000&socketTimeoutMS=60000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5&replicaSet=rs0';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -266,7 +266,8 @@ const MONGODB_OPTIONS = {
     readPreference: 'primary',
     readPreferenceTags: [],
     readConcern: { level: 'local' },
-    writeConcern: { w: 'majority', wtimeout: 60000 }
+    writeConcern: { w: 'majority', wtimeout: 60000 },
+    replicaSet: 'rs0'
 };
 
 // Función para verificar la conectividad básica
@@ -274,10 +275,21 @@ const checkBasicConnectivity = async () => {
     try {
         console.log('Verificando conectividad básica con MongoDB...');
         const net = require('net');
+        const dns = require('dns');
+        
+        // Primero intentamos resolver el nombre de host
+        try {
+            console.log('Resolviendo nombre de host...');
+            const addresses = await dns.promises.lookup('5.135.131.59');
+            console.log('Dirección IP resuelta:', addresses);
+        } catch (error) {
+            console.error('Error al resolver el nombre de host:', error);
+            throw new Error('No se pudo resolver el nombre de host');
+        }
         
         return new Promise((resolve, reject) => {
             const socket = new net.Socket();
-            const timeout = 5000;
+            const timeout = 10000; // Aumentado a 10 segundos
             
             socket.setTimeout(timeout);
             
@@ -299,6 +311,7 @@ const checkBasicConnectivity = async () => {
                 reject(err);
             });
             
+            console.log('Intentando conexión TCP con MongoDB...');
             socket.connect(6590, '5.135.131.59');
         });
     } catch (error) {
