@@ -183,7 +183,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=120000&connectTimeoutMS=120000&socketTimeoutMS=120000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5&family=4';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE9pEmCX7dDhX5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -193,7 +193,6 @@ const MONGODB_OPTIONS = {
     family: 4,
     directConnection: true,
     authSource: 'admin',
-    authMechanism: 'SCRAM-SHA-1',
     ssl: false,
     tls: false,
     tlsAllowInvalidCertificates: true,
@@ -201,202 +200,41 @@ const MONGODB_OPTIONS = {
     retryWrites: true,
     retryReads: true,
     maxPoolSize: 10,
-    minPoolSize: 5,
-    heartbeatFrequencyMS: 10000,
-    keepAlive: true,
-    keepAliveInitialDelay: 300000,
-    autoIndex: true,
-    autoCreate: true,
-    w: 'majority',
-    wtimeoutMS: 120000,
-    readPreference: 'primary',
-    readPreferenceTags: [],
-    readConcern: { level: 'local' },
-    writeConcern: { w: 'majority', wtimeout: 120000 }
+    minPoolSize: 5
 };
 
-// Función para verificar la conectividad básica
-const checkBasicConnectivity = async () => {
-    console.log('=== Iniciando verificación de conectividad básica ===');
-    const net = require('net');
-    const dns = require('dns');
+// Función mejorada para conectar a MongoDB
+const connectToMongoDB = async () => {
+    console.log('=== Intentando conectar a MongoDB ===');
+    console.log('Estado actual de la conexión:', mongoose.connection.readyState);
     
     try {
-        // Verificar DNS
-        console.log('1. Verificando resolución DNS...');
-        try {
-            const addresses = await dns.promises.lookup('5.135.131.59');
-            console.log('DNS resuelto exitosamente:', addresses);
-        } catch (error) {
-            console.error('Error en resolución DNS:', error);
-            throw new Error(`Error en resolución DNS: ${error.message}`);
+        if (mongoose.connection.readyState === 1) {
+            console.log('Ya conectado a MongoDB');
+            return true;
         }
 
-        // Verificar conexión TCP
-        console.log('2. Verificando conexión TCP...');
-        return new Promise((resolve, reject) => {
-            const socket = new net.Socket();
-            const timeout = 30000; // Aumentado a 30 segundos
-            
-            socket.setTimeout(timeout);
-            
-            socket.on('connect', () => {
-                console.log('Conexión TCP establecida exitosamente');
-                socket.destroy();
-                resolve(true);
-            });
-            
-            socket.on('timeout', () => {
-                console.error('Timeout en conexión TCP');
-                socket.destroy();
-                reject(new Error('Timeout al intentar conexión TCP'));
-            });
-            
-            socket.on('error', (err) => {
-                console.error('Error en conexión TCP:', {
-                    message: err.message,
-                    code: err.code,
-                    errno: err.errno,
-                    syscall: err.syscall
-                });
-                socket.destroy();
-                reject(new Error(`Error en conexión TCP: ${err.message}`));
-            });
-
-            console.log('Intentando conexión TCP a 5.135.131.59:6590...');
-            socket.connect({
-                host: '5.135.131.59',
-                port: 6590,
-                timeout: timeout,
-                localAddress: undefined,
-                localPort: undefined,
-                family: 4
-            });
-        });
-    } catch (error) {
-        console.error('Error en verificación de conectividad:', {
-            message: error.message,
-            stack: error.stack
-        });
-        throw error;
-    }
-};
-
-// Función para conectar a MongoDB
-const connectToMongoDB = async () => {
-    try {
-        console.log('=== Intentando conectar a MongoDB ===');
-        console.log('URI de MongoDB:', MONGODB_URI.replace(/:[^:]*@/, ':****@')); // Ocultar contraseña en logs
+        console.log('Conectando a MongoDB...');
+        await mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
         
-        // Verificar conectividad básica primero
-        try {
-            await checkBasicConnectivity();
-            console.log('Verificación de conectividad básica exitosa');
-        } catch (error) {
-            console.error('Error en la conectividad básica:', error);
-            throw new Error(`No se puede establecer conexión básica con el servidor MongoDB: ${error.message}`);
-        }
-        
-        // Si ya hay una conexión activa, la cerramos
-        if (mongoose.connection.readyState !== 0) {
-            console.log('Cerrando conexión existente...');
-            await mongoose.connection.close();
-        }
+        mongoose.connection.on('connected', () => {
+            console.log('MongoDB conectado exitosamente');
+        });
 
-        // Configurar eventos de conexión
         mongoose.connection.on('error', (err) => {
-            console.error('Error de conexión MongoDB:', {
-                message: err.message,
-                name: err.name,
-                code: err.code,
-                stack: err.stack
-            });
+            console.error('Error en la conexión MongoDB:', err);
         });
 
         mongoose.connection.on('disconnected', () => {
             console.log('MongoDB desconectado');
         });
 
-        mongoose.connection.on('connected', () => {
-            console.log('MongoDB conectado');
-        });
-
-        mongoose.connection.on('connecting', () => {
-            console.log('Conectando a MongoDB...');
-        });
-
-        mongoose.connection.on('reconnected', () => {
-            console.log('MongoDB reconectado');
-        });
-
-        // Intentar conexión
-        console.log('Iniciando conexión a MongoDB...');
-        console.log('Opciones de conexión:', JSON.stringify(MONGODB_OPTIONS, null, 2));
-        
-        // Intentar conexión con retry
-        let retries = 3;
-        let lastError = null;
-        
-        while (retries > 0) {
-            try {
-                console.log(`Intento de conexión ${4-retries}/3...`);
-                // Intentar conexión con timeout
-                const connectionPromise = mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
-                const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Timeout al conectar con MongoDB')), 30000);
-                });
-
-                await Promise.race([connectionPromise, timeoutPromise]);
-                
-                // Verificar que la conexión se estableció correctamente
-                if (mongoose.connection.readyState !== 1) {
-                    throw new Error('La conexión no se estableció correctamente');
-                }
-
-                // Verificar que podemos acceder a la base de datos
-                const db = mongoose.connection.db;
-                if (!db) {
-                    throw new Error('No se pudo acceder a la base de datos');
-                }
-
-                // Verificar que podemos listar las colecciones
-                try {
-                    const collections = await db.listCollections().toArray();
-                    console.log('Colecciones disponibles:', collections.map(c => c.name));
-                    break;
-                } catch (error) {
-                    console.error('Error al listar colecciones:', error);
-                    throw new Error('No se pudo acceder a las colecciones de la base de datos');
-                }
-            } catch (error) {
-                lastError = error;
-                console.error(`Intento de conexión fallido (${4-retries}/3):`, {
-                    message: error.message,
-                    name: error.name,
-                    code: error.code
-                });
-                retries--;
-                if (retries > 0) {
-                    console.log(`Esperando 5 segundos antes de reintentar...`);
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                }
-            }
-        }
-
-        if (retries === 0) {
-            throw lastError;
-        }
-
-        console.log('=== Conexión exitosa a MongoDB ===');
         return true;
     } catch (error) {
-        console.error('Error detallado al conectar a MongoDB:', {
-            message: error.message,
-            name: error.name,
-            code: error.code,
-            stack: error.stack
-        });
-        throw error;
+        console.error('=== Error al conectar a MongoDB ===');
+        console.error('Error:', error);
+        console.error('Estado de la conexión:', mongoose.connection.readyState);
+        return false;
     }
 };
 
@@ -492,7 +330,7 @@ const connectWithRetry = async () => {
         };
 
         // Intentar conexión
-        await mongoose.connect('mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true', options);
+        await mongoose.connect('mongodb://BBDD-mongo:ObnfN9UwzjE9pEmCX7dDhX5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true', options);
         
         console.log('=== Conexión exitosa a MongoDB ===');
         console.log('Base de datos:', mongoose.connection.db.databaseName);
