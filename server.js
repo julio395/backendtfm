@@ -125,42 +125,13 @@ app.get('/api/health', async (req, res) => {
         const isConnected = await connectToMongoDB();
         console.log('Estado de conexión MongoDB:', isConnected);
         
-        if (!isConnected) {
-            console.log('MongoDB no está conectado');
-            return res.status(500).json({
-                status: 'error',
-                error: 'Error de conexión con la base de datos',
-                mongodb: {
-                    connected: false,
-                    error: 'No se pudo establecer conexión'
-                }
-            });
-        }
-
-        console.log('Verificando acceso a la base de datos...');
-        const db = mongoose.connection.db;
-        if (!db) {
-            console.log('No se pudo acceder a la base de datos');
-            return res.status(500).json({
-                status: 'error',
-                error: 'Error de conexión con la base de datos',
-                mongodb: {
-                    connected: false,
-                    error: 'No se pudo acceder a la base de datos'
-                }
-            });
-        }
-
-        console.log('Listando colecciones...');
-        const collections = await db.listCollections().toArray();
-        console.log('Colecciones encontradas:', collections.map(c => c.name));
-
-        console.log('=== Health Check Completado con Éxito ===');
+        // Incluso si MongoDB no está conectado, devolvemos una respuesta
         res.json({
-            status: 'ok',
+            status: isConnected ? 'ok' : 'warning',
+            message: isConnected ? 'Servidor funcionando correctamente' : 'Servidor funcionando pero con problemas de conexión a la base de datos',
             mongodb: {
-                connected: true,
-                collections: collections.map(c => c.name)
+                connected: isConnected,
+                error: isConnected ? null : 'No se pudo establecer conexión con la base de datos'
             }
         });
     } catch (error) {
@@ -170,9 +141,10 @@ app.get('/api/health', async (req, res) => {
             code: error.code,
             stack: error.stack
         });
-        res.status(500).json({
-            status: 'error',
-            error: 'Error de conexión con la base de datos',
+        // Devolvemos una respuesta incluso en caso de error
+        res.json({
+            status: 'warning',
+            message: 'Servidor funcionando pero con problemas de conexión a la base de datos',
             mongodb: {
                 connected: false,
                 error: error.message,
