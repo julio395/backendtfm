@@ -11,7 +11,10 @@ const corsOptions = {
     origin: [
         'https://projectfm.julio.coolify.hgccarlos.es',
         'https://backendtfm.julio.coolify.hgccarlos.es',
-        'http://localhost:3000'
+        'http://localhost:3000',
+        'http://localhost:5000',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5000'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -49,6 +52,7 @@ app.options('*', cors(corsOptions));
 app.use((req, res, next) => {
     console.log(`=== Nueva petición ${req.method} a ${req.url} ===`);
     console.log('Headers:', req.headers);
+    console.log('Origin:', req.headers.origin);
     next();
 });
 
@@ -283,7 +287,7 @@ const initializeCollections = async () => {
         const db = mongoose.connection.db;
         
         // Lista de colecciones requeridas
-        const requiredCollections = ['Activos', 'Amenazas', 'Vulnerabilidades', 'Salvaguardas', 'Relaciones'];
+        const requiredCollections = ['Activos', 'Amenazas', 'Vulnerabilidades', 'Salvaguardas', 'Relaciones', 'Auditorias'];
         
         // Obtener colecciones existentes
         const existingCollections = await db.listCollections().toArray();
@@ -303,6 +307,11 @@ const initializeCollections = async () => {
         const activosCollection = db.collection('Activos');
         const activosCount = await activosCollection.countDocuments();
         console.log(`Número de documentos en Activos: ${activosCount}`);
+        
+        // Verificar colección Auditorias
+        const auditoriasCollection = db.collection('Auditorias');
+        const auditoriasCount = await auditoriasCollection.countDocuments();
+        console.log(`Número de documentos en Auditorias: ${auditoriasCount}`);
         
         if (activosCount === 0) {
             console.log('La colección Activos está vacía');
@@ -894,6 +903,17 @@ app.get('/api/auditoria/borrador/:userId', async (req, res) => {
 app.get('/api/auditoria/en-progreso/:userId', async (req, res) => {
     try {
         const { userId } = req.params;
+        console.log('Buscando auditoría en progreso para usuario:', userId);
+        
+        const db = mongoose.connection.db;
+        const auditoriasCollection = db.collection('Auditorias');
+        
+        // Verificar que la colección existe
+        const collections = await db.listCollections().toArray();
+        if (!collections.some(c => c.name === 'Auditorias')) {
+            console.log('La colección Auditorias no existe, creándola...');
+            await db.createCollection('Auditorias');
+        }
         
         // Buscar la auditoría en progreso más reciente del usuario
         const auditoria = await auditoriasCollection.findOne(
@@ -904,21 +924,56 @@ app.get('/api/auditoria/en-progreso/:userId', async (req, res) => {
             { sort: { ultimaModificacion: -1 } }
         );
         
+        console.log('Resultado de búsqueda:', auditoria ? 'Auditoría encontrada' : 'No se encontró auditoría');
+        
         if (!auditoria) {
-            return res.status(404).json({ message: 'No se encontró una auditoría en progreso' });
+            console.log('No se encontró auditoría en progreso para el usuario:', userId);
+            return res.status(404).json({ 
+                message: 'No se encontró una auditoría en progreso',
+                userId: userId
+            });
         }
+        
+        console.log('Auditoría encontrada:', {
+            id: auditoria._id,
+            estado: auditoria.estado,
+            ultimaModificacion: auditoria.ultimaModificacion
+        });
         
         res.json(auditoria);
     } catch (error) {
         console.error('Error al obtener auditoría en progreso:', error);
-        res.status(500).json({ error: 'Error al obtener la auditoría en progreso' });
+        res.status(500).json({ 
+            error: 'Error al obtener la auditoría en progreso',
+            details: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 
 // Crear nueva auditoría en progreso
 app.post('/api/auditoria/en-progreso', async (req, res) => {
     try {
-        const { respuestas, cliente } = req.body;
+        console.log('=== Creando nueva auditoría en progreso ===');
+        console.log('Headers recibidos:', req.headers);
+        console.log('Datos recibidos:', JSON.stringify(req.body, null, 2));
+        
+        // Verificar que la colección existe
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        console.log('Colecciones disponibles:', collections.map(c => c.name));
+        
+        if (!collections.some(c => c.name === 'Auditorias')) {
+            console.log('La colección Auditorias no existe, creándola...');
+            await db.createCollection('Auditorias');
+        }
+        
+        const { respuestas = {}, cliente } = req.body;
+        
+        if (!cliente || !cliente.id) {
+            console.error('Error: No se proporcionó información del cliente');
+            return res.status(400).json({ error: 'Se requiere información del cliente' });
+        }
         
         const auditoriaData = {
             _id: new ObjectId(),
@@ -930,64 +985,107 @@ app.post('/api/auditoria/en-progreso', async (req, res) => {
             procesadoIA: false
         };
         
+        console.log('Datos de auditoría a crear:', JSON.stringify(auditoriaData, null, 2));
+        
+        const auditoriasCollection = db.collection('Auditorias');
+        console.log('Intentando insertar en la colección Auditorias...');
+        
         const result = await auditoriasCollection.insertOne(auditoriaData);
+        console.log('Resultado de la inserción:', result);
         
         if (result.acknowledged) {
+            console.log('Auditoría creada exitosamente:', result);
             res.json({ 
                 _id: auditoriaData._id,
                 message: 'Auditoría en progreso creada correctamente'
             });
         } else {
-            throw new Error('Error al crear la auditoría');
+            console.error('Error: La inserción no fue reconocida por MongoDB');
+            throw new Error('Error al crear la auditoría: inserción no reconocida');
         }
     } catch (error) {
-        console.error('Error al crear auditoría en progreso:', error);
-        res.status(500).json({ error: 'Error al crear la auditoría en progreso' });
+        console.error('Error detallado al crear auditoría en progreso:', error);
+        console.error('Stack trace:', error.stack);
+        res.status(500).json({ 
+            error: 'Error al crear la auditoría en progreso',
+            details: error.message
+        });
     }
 });
 
-// Actualizar auditoría en progreso
+// Actualizar auditoría
 app.put('/api/auditoria/:id', async (req, res) => {
     try {
+        console.log('=== Actualizando auditoría ===');
+        console.log('ID de auditoría:', req.params.id);
+        console.log('Datos recibidos:', JSON.stringify(req.body, null, 2));
+
         const { id } = req.params;
-        const { respuestas, cliente, ultimaModificacion } = req.body;
-        
-        // Obtener la auditoría actual
-        const auditoriaActual = await auditoriasCollection.findOne({ _id: new ObjectId(id) });
-        
-        if (!auditoriaActual) {
-            return res.status(404).json({ error: 'No se encontró la auditoría para actualizar' });
+        const { respuestas, cliente, estado } = req.body;
+
+        // Verificar que la colección existe
+        const db = mongoose.connection.db;
+        const collections = await db.listCollections().toArray();
+        console.log('Colecciones disponibles:', collections.map(c => c.name));
+
+        if (!collections.some(c => c.name === 'Auditorias')) {
+            console.error('Error: La colección Auditorias no existe');
+            return res.status(500).json({ error: 'La colección de auditorías no está disponible' });
         }
+
+        const auditoriasCollection = db.collection('Auditorias');
         
-        // Fusionar las respuestas existentes con las nuevas
-        const respuestasActualizadas = {
-            ...auditoriaActual.respuestas,
-            ...respuestas
-        };
-        
+        // Verificar que la auditoría existe
+        const auditoriaExistente = await auditoriasCollection.findOne({ _id: new ObjectId(id) });
+        if (!auditoriaExistente) {
+            console.error('Error: No se encontró la auditoría con ID:', id);
+            return res.status(404).json({ error: 'Auditoría no encontrada' });
+        }
+
+        // Preparar datos de actualización
         const updateData = {
-            $set: {
-                respuestas: respuestasActualizadas,
-                ultimaModificacion: new Date().toISOString()
-            }
+            ultimaModificacion: new Date().toISOString()
         };
-        
+
+        if (respuestas) updateData.respuestas = respuestas;
+        if (cliente) updateData.cliente = cliente;
+        if (estado) updateData.estado = estado;
+
+        console.log('Datos de actualización:', JSON.stringify(updateData, null, 2));
+
+        // Realizar la actualización
         const result = await auditoriasCollection.updateOne(
             { _id: new ObjectId(id) },
-            updateData
+            { $set: updateData }
         );
-        
-        if (result.modifiedCount > 0) {
-            res.json({ 
-                message: 'Auditoría actualizada correctamente',
-                respuestas: respuestasActualizadas
-            });
-        } else {
-            res.status(404).json({ error: 'No se encontró la auditoría para actualizar' });
+
+        console.log('Resultado de la actualización:', result);
+
+        if (result.matchedCount === 0) {
+            console.error('Error: No se encontró la auditoría para actualizar');
+            return res.status(404).json({ error: 'Auditoría no encontrada' });
         }
+
+        if (result.modifiedCount === 0) {
+            console.log('Advertencia: No se modificó ningún documento');
+            return res.status(200).json({ 
+                message: 'La auditoría ya estaba actualizada',
+                auditoriaId: id
+            });
+        }
+
+        res.json({ 
+            message: 'Auditoría actualizada correctamente',
+            auditoriaId: id
+        });
+
     } catch (error) {
-        console.error('Error al actualizar auditoría:', error);
-        res.status(500).json({ error: 'Error al actualizar la auditoría' });
+        console.error('Error detallado al actualizar auditoría:', error);
+        console.error('Stack trace:', error.stack);
+        res.status(500).json({ 
+            error: 'Error al actualizar la auditoría',
+            details: error.message
+        });
     }
 });
 
