@@ -8,7 +8,11 @@ const app = express();
 
 // Configuración de CORS
 const corsOptions = {
-    origin: ['https://projectfm.julio.coolify.hgccarlos.es', 'http://localhost:3000'],
+    origin: [
+        'https://projectfm.julio.coolify.hgccarlos.es',
+        'https://backendtfm.julio.coolify.hgccarlos.es',
+        'http://localhost:3000'
+    ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
     credentials: true,
