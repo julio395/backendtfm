@@ -227,7 +227,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&connectTimeoutMS=60000&socketTimeoutMS=60000&retryWrites=true&retryReads=true';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true&serverSelectionTimeoutMS=60000&connectTimeoutMS=60000&socketTimeoutMS=60000&retryWrites=true&retryReads=true&maxPoolSize=10&minPoolSize=5';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
@@ -250,7 +250,61 @@ const MONGODB_OPTIONS = {
     maxIdleTimeMS: 60000,
     waitQueueTimeoutMS: 60000,
     autoIndex: true,
-    autoCreate: true
+    autoCreate: true,
+    connectTimeoutMS: 60000,
+    socketTimeoutMS: 60000,
+    serverSelectionTimeoutMS: 60000,
+    heartbeatFrequencyMS: 10000,
+    retryWrites: true,
+    retryReads: true,
+    maxPoolSize: 10,
+    minPoolSize: 5,
+    maxIdleTimeMS: 60000,
+    waitQueueTimeoutMS: 60000,
+    w: 'majority',
+    wtimeoutMS: 60000,
+    readPreference: 'primary',
+    readPreferenceTags: [],
+    readConcern: { level: 'local' },
+    writeConcern: { w: 'majority', wtimeout: 60000 }
+};
+
+// Función para verificar la conectividad básica
+const checkBasicConnectivity = async () => {
+    try {
+        console.log('Verificando conectividad básica con MongoDB...');
+        const net = require('net');
+        
+        return new Promise((resolve, reject) => {
+            const socket = new net.Socket();
+            const timeout = 5000;
+            
+            socket.setTimeout(timeout);
+            
+            socket.on('connect', () => {
+                console.log('Conexión TCP establecida con MongoDB');
+                socket.destroy();
+                resolve(true);
+            });
+            
+            socket.on('timeout', () => {
+                console.log('Timeout al intentar conexión TCP con MongoDB');
+                socket.destroy();
+                reject(new Error('Timeout al intentar conexión TCP'));
+            });
+            
+            socket.on('error', (err) => {
+                console.log('Error al intentar conexión TCP con MongoDB:', err.message);
+                socket.destroy();
+                reject(err);
+            });
+            
+            socket.connect(6590, '5.135.131.59');
+        });
+    } catch (error) {
+        console.error('Error al verificar conectividad:', error);
+        throw error;
+    }
 };
 
 // Función para conectar a MongoDB
@@ -258,6 +312,14 @@ const connectToMongoDB = async () => {
     try {
         console.log('=== Intentando conectar a MongoDB ===');
         console.log('URI de MongoDB:', MONGODB_URI.replace(/:[^:]*@/, ':****@')); // Ocultar contraseña en logs
+        
+        // Verificar conectividad básica primero
+        try {
+            await checkBasicConnectivity();
+        } catch (error) {
+            console.error('Error en la conectividad básica:', error);
+            throw new Error('No se puede establecer conexión básica con el servidor MongoDB');
+        }
         
         // Si ya hay una conexión activa, la cerramos
         if (mongoose.connection.readyState !== 0) {
