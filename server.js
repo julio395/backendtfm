@@ -149,15 +149,21 @@ app.get('/api/health', async (req, res) => {
             });
         }
 
+        // Verificar que podemos acceder a la base de datos
+        const db = mongoose.connection.db;
+        if (!db) {
+            throw new Error('No se pudo acceder a la base de datos');
+        }
+
         try {
-            const collections = await mongoose.connection.db.listCollections().toArray();
+            const collections = await db.listCollections().toArray();
             res.json({
                 status: 'ok',
                 timestamp: new Date().toISOString(),
                 mongodb: {
                     status: 'connected',
                     collections: collections.map(c => c.name),
-                    database: mongoose.connection.db.databaseName
+                    database: db.databaseName
                 },
                 memory: process.memoryUsage()
             });
@@ -189,14 +195,14 @@ const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE5Jixa7JMe1oT8iLwjUWI8Wkc10f
 const MONGODB_OPTIONS = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 30000,
-    socketTimeoutMS: 45000,
-    connectTimeoutMS: 30000,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 10000,
+    connectTimeoutMS: 5000,
     retryWrites: true,
     retryReads: true,
     maxPoolSize: 10,
     minPoolSize: 5,
-    heartbeatFrequencyMS: 10000,
+    heartbeatFrequencyMS: 5000,
     keepAlive: true,
     keepAliveInitialDelay: 300000
 };
@@ -205,9 +211,8 @@ const MONGODB_OPTIONS = {
 const connectToMongoDB = async () => {
     try {
         console.log('=== Intentando conectar a MongoDB ===');
-        console.log('Estado actual de la conexión:', mongoose.connection.readyState);
         
-        // Cerrar conexión existente si hay una
+        // Si ya hay una conexión activa, la cerramos
         if (mongoose.connection.readyState !== 0) {
             console.log('Cerrando conexión existente...');
             await mongoose.connection.close();
@@ -228,13 +233,7 @@ const connectToMongoDB = async () => {
 
         // Intentar conexión
         console.log('Iniciando conexión a MongoDB...');
-        await mongoose.connect(MONGODB_URI, {
-            ...MONGODB_OPTIONS,
-            serverSelectionTimeoutMS: 10000,
-            socketTimeoutMS: 45000,
-            connectTimeoutMS: 10000,
-            family: 4
-        });
+        await mongoose.connect(MONGODB_URI, MONGODB_OPTIONS);
         
         // Verificar que la conexión se estableció correctamente
         if (mongoose.connection.readyState !== 1) {
