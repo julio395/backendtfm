@@ -217,42 +217,66 @@ const MONGODB_OPTIONS = {
 
 // Función para verificar la conectividad básica
 const checkBasicConnectivity = async () => {
-    try {
-        console.log('Resolviendo nombre de host...');
-        const addresses = await dns.promises.lookup('5.135.131.59');
-        console.log('Dirección IP resuelta:', addresses);
-    } catch (error) {
-        console.error('Error al resolver el nombre de host:', error);
-        throw new Error('No se pudo resolver el nombre de host');
-    }
+    console.log('=== Iniciando verificación de conectividad básica ===');
+    const net = require('net');
+    const dns = require('dns');
     
-    return new Promise((resolve, reject) => {
-        const socket = new net.Socket();
-        const timeout = 5000;
-        
-        socket.setTimeout(timeout);
-        
-        socket.on('connect', () => {
-            console.log('Conexión TCP establecida con MongoDB');
-            socket.destroy();
-            resolve(true);
+    try {
+        // Verificar DNS
+        console.log('1. Verificando resolución DNS...');
+        try {
+            const addresses = await dns.promises.lookup('5.135.131.59');
+            console.log('DNS resuelto exitosamente:', addresses);
+        } catch (error) {
+            console.error('Error en resolución DNS:', error);
+            throw new Error(`Error en resolución DNS: ${error.message}`);
+        }
+
+        // Verificar conexión TCP
+        console.log('2. Verificando conexión TCP...');
+        return new Promise((resolve, reject) => {
+            const socket = new net.Socket();
+            const timeout = 10000; // Aumentado a 10 segundos
+            
+            socket.setTimeout(timeout);
+            
+            socket.on('connect', () => {
+                console.log('Conexión TCP establecida exitosamente');
+                socket.destroy();
+                resolve(true);
+            });
+            
+            socket.on('timeout', () => {
+                console.error('Timeout en conexión TCP');
+                socket.destroy();
+                reject(new Error('Timeout al intentar conexión TCP'));
+            });
+            
+            socket.on('error', (err) => {
+                console.error('Error en conexión TCP:', {
+                    message: err.message,
+                    code: err.code,
+                    errno: err.errno,
+                    syscall: err.syscall
+                });
+                socket.destroy();
+                reject(new Error(`Error en conexión TCP: ${err.message}`));
+            });
+
+            console.log('Intentando conexión TCP a 5.135.131.59:6590...');
+            socket.connect({
+                host: '5.135.131.59',
+                port: 6590,
+                timeout: timeout
+            });
         });
-        
-        socket.on('timeout', () => {
-            console.log('Timeout al intentar conexión TCP con MongoDB');
-            socket.destroy();
-            reject(new Error('Timeout al intentar conexión TCP'));
+    } catch (error) {
+        console.error('Error en verificación de conectividad:', {
+            message: error.message,
+            stack: error.stack
         });
-        
-        socket.on('error', (err) => {
-            console.log('Error al intentar conexión TCP con MongoDB:', err.message);
-            socket.destroy();
-            reject(err);
-        });
-        
-        console.log('Intentando conexión TCP con MongoDB...');
-        socket.connect(6590, '5.135.131.59');
-    });
+        throw error;
+    }
 };
 
 // Función para conectar a MongoDB
@@ -264,9 +288,10 @@ const connectToMongoDB = async () => {
         // Verificar conectividad básica primero
         try {
             await checkBasicConnectivity();
+            console.log('Verificación de conectividad básica exitosa');
         } catch (error) {
             console.error('Error en la conectividad básica:', error);
-            throw new Error('No se puede establecer conexión básica con el servidor MongoDB');
+            throw new Error(`No se puede establecer conexión básica con el servidor MongoDB: ${error.message}`);
         }
         
         // Si ya hay una conexión activa, la cerramos
