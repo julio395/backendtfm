@@ -13,8 +13,6 @@ const corsOptions = {
         'https://backendtfm.julio.coolify.hgccarlos.es',
         'http://localhost:3000',
         'http://localhost:5000',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:5000'
     ],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -60,64 +58,64 @@ app.use((req, res, next) => {
 app.use(express.json());
 
 // Ruta de prueba
-app.get('/api/test', (req, res) => {
-    console.log('Recibida petición de prueba');
-    res.json({ message: 'Servidor funcionando correctamente' });
-});
+// app.get('/api/test', (req, res) => {
+//     console.log('Recibida petición de prueba');
+//     res.json({ message: 'Servidor funcionando correctamente' });
+// });
 
 // Ruta para verificar la conexión a MongoDB
-app.get('/api/mongodb-status', async (req, res) => {
-    try {
-        console.log('=== Verificando estado de MongoDB ===');
-        console.log('Estado de conexión:', mongoose.connection.readyState);
+// app.get('/api/mongodb-status', async (req, res) => {
+//     try {
+//         console.log('=== Verificando estado de MongoDB ===');
+//         console.log('Estado de conexión:', mongoose.connection.readyState);
         
-        if (mongoose.connection.readyState !== 1) {
-            console.log('Intentando reconectar a MongoDB...');
-            const connected = await connectToMongoDB();
-            if (!connected) {
-                throw new Error('No se pudo establecer la conexión con MongoDB');
-            }
-        }
+//         if (mongoose.connection.readyState !== 1) {
+//             console.log('Intentando reconectar a MongoDB...');
+//             const connected = await connectToMongoDB();
+//             if (!connected) {
+//                 throw new Error('No se pudo establecer la conexión con MongoDB');
+//             }
+//         }
 
-        const db = mongoose.connection.db;
-        if (!db) {
-            throw new Error('No se pudo acceder a la base de datos');
-        }
+//         const db = mongoose.connection.db;
+//         if (!db) {
+//             throw new Error('No se pudo acceder a la base de datos');
+//         }
 
-        console.log('Base de datos:', db.databaseName);
+//         console.log('Base de datos:', db.databaseName);
         
-        try {
-            const collections = await db.listCollections().toArray();
-            console.log('Colecciones disponibles:', collections.map(c => c.name));
+//         try {
+//             const collections = await db.listCollections().toArray();
+//             console.log('Colecciones disponibles:', collections.map(c => c.name));
             
-            // Verificar específicamente la colección Activos
-            const activosCollection = collections.find(c => c.name === 'Activos');
-            if (!activosCollection) {
-                console.log('La colección Activos no existe, creándola...');
-                await db.createCollection('Activos');
-                console.log('Colección Activos creada exitosamente');
-            }
+//             // Verificar específicamente la colección Activos
+//             const activosCollection = collections.find(c => c.name === 'Activos');
+//             if (!activosCollection) {
+//                 console.log('La colección Activos no existe, creándola...');
+//                 await db.createCollection('Activos');
+//                 console.log('Colección Activos creada exitosamente');
+//             }
             
-            res.json({
-                status: 'connected',
-                database: db.databaseName,
-                collections: collections.map(c => c.name),
-                connectionState: mongoose.connection.readyState
-            });
-        } catch (error) {
-            console.error('Error al listar colecciones:', error);
-            throw new Error(`Error al acceder a las colecciones: ${error.message}`);
-        }
-    } catch (error) {
-        console.error('Error al verificar estado de MongoDB:', error);
-        res.status(500).json({
-            status: 'error',
-            message: error.message,
-            connectionState: mongoose.connection.readyState,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
-    }
-});
+//             res.json({
+//                 status: 'connected',
+//                 database: db.databaseName,
+//                 collections: collections.map(c => c.name),
+//                 connectionState: mongoose.connection.readyState
+//             });
+//         } catch (error) {
+//             console.error('Error al listar colecciones:', error);
+//             throw new Error(`Error al acceder a las colecciones: ${error.message}`);
+//         }
+//     } catch (error) {
+//         console.error('Error al verificar estado de MongoDB:', error);
+//         res.status(500).json({
+//             status: 'error',
+//             message: error.message,
+//             connectionState: mongoose.connection.readyState,
+//             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+//         });
+//     }
+// });
 
 // Ruta de prueba simple
 app.get('/test', (req, res) => {
