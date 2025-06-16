@@ -141,7 +141,7 @@ app.get('/api/health', async (req, res) => {
 });
 
 // Configuración de MongoDB
-const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE9pEmCX7dDhX5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/tfm?authSource=admin&directConnection=true';
+const MONGODB_URI = 'mongodb://BBDD-mongo:ObnfN9UwzjE9pEmCX7dDhX5Jixa7JMe1oT8iLwjUWI8Wkc10fhKpVVqmmx86b5DH@5.135.131.59:6590/?directConnection=true';
 const MONGODB_OPTIONS = {
     useNewUrlParser: true, // Deprecated, but often included for compatibility
     useUnifiedTopology: true, // Deprecated, but often included for compatibility
